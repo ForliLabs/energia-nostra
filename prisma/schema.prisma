@@ -1,0 +1,269 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Auth & Multi-Tenancy ──
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String?
+  passwordHash   String
+  role           String   @default("member") // admin | member | auditor | superadmin
+  fiscalCode     String?
+  cerId          String?
+  cer            Cer?     @relation(fields: [cerId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sessions       Session[]
+  votes          BallotCast[]
+  invoices       Invoice[]
+  meterUploads   MeterUpload[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// ── CER (Community) ──
+
+model Cer {
+  id              String   @id @default(cuid())
+  name            String
+  territory       String
+  municipality    String
+  province        String
+  foundedYear     Int
+  referenceNote   String?
+  cabinaPrimaria  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  members         Member[]
+  users           User[]
+  energyReadings  EnergyReading[]
+  documents       Document[]
+  votes           Vote[]
+  announcements   Announcement[]
+  gseReports      GseReport[]
+  invoices        Invoice[]
+  pnrrGrants      PnrrGrant[]
+  meterUploads    MeterUpload[]
+}
+
+// ── Members ──
+
+model Member {
+  id                String   @id @default(cuid())
+  name              String
+  type              String   // produttore | consumatore | prosumer
+  podCode           String   @unique
+  energyBalanceKwh  Float
+  monthlyBenefitEuro Float
+  municipality      String
+  joinedAt          String
+  cerId             String
+  cer               Cer      @relation(fields: [cerId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  incentiveShares   IncentiveShare[]
+  meterReadings     MeterReading[]
+  invoices          Invoice[]
+}
+
+// ── Energy Readings (monthly CER totals) ──
+
+model EnergyReading {
+  id                String   @id @default(cuid())
+  label             String
+  productionKwh     Float
+  consumptionKwh    Float
+  sharedEnergyKwh   Float
+  selfConsumptionPct Float
+  savingsEuro       Float
+  gseIncentiveEuro  Float
+  co2AvoidedKg      Float
+  cerId             String
+  cer               Cer      @relation(fields: [cerId], references: [id])
+  createdAt         DateTime @default(now())
+}
+
+// ── Smart Meter Readings (per-POD, granular) ──
+
+model MeterReading {
+  id            String   @id @default(cuid())
+  memberId      String
+  member        Member   @relation(fields: [memberId], references: [id])
+  timestamp     DateTime
+  consumptionKwh Float
+  productionKwh  Float
+  source        String   @default("csv") // csv | api | manual
+  validated     Boolean  @default(false)
+  anomaly       String?
+  uploadId      String?
+  upload        MeterUpload? @relation(fields: [uploadId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model MeterUpload {
+  id            String   @id @default(cuid())
+  fileName      String
+  recordCount   Int
+  validCount    Int
+  anomalyCount  Int
+  status        String   @default("processing") // processing | completed | failed
+  uploadedById  String
+  uploadedBy    User     @relation(fields: [uploadedById], references: [id])
+  cerId         String
+  cer           Cer      @relation(fields: [cerId], references: [id])
+  readings      MeterReading[]
+  createdAt     DateTime @default(now())
+}
+
+// ── Incentive Distribution ──
+
+model IncentiveShare {
+  id            String   @id @default(cuid())
+  memberId      String
+  member        Member   @relation(fields: [memberId], references: [id])
+  period        String
+  sharePct      Float
+  monthlyEuro   Float
+  yearToDateEuro Float
+  createdAt     DateTime @default(now())
+}
+
+// ── Documents ──
+
+model Document {
+  id        String   @id @default(cuid())
+  title     String
+  category  String   // statuto | regolamento | verbale | report
+  status    String   // approvato | in_revisione | da_firmare
+  owner     String
+  fileUrl   String?
+  signedAt  DateTime?
+  cerId     String
+  cer       Cer      @relation(fields: [cerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Voting ──
+
+model Vote {
+  id            String       @id @default(cuid())
+  title         String
+  description   String?
+  options       String       // JSON array of options
+  voteType      String       @default("open") // open | secret
+  quorum        String
+  scheduledAt   String
+  closesAt      String?
+  status        String       @default("programmata") // programmata | aperta | chiusa | annullata
+  cerId         String
+  cer           Cer          @relation(fields: [cerId], references: [id])
+  ballots       BallotCast[]
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+model BallotCast {
+  id        String   @id @default(cuid())
+  voteId    String
+  vote      Vote     @relation(fields: [voteId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  choice    String
+  createdAt DateTime @default(now())
+
+  @@unique([voteId, userId])
+}
+
+// ── Announcements ──
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  publishedAt String
+  cerId       String
+  cer         Cer      @relation(fields: [cerId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+// ── GSE Reporting ──
+
+model GseReport {
+  id                 String   @id @default(cuid())
+  period             String
+  sharedEnergyKwh    Float
+  totalIncentiveEuro Float
+  status             String   @default("bozza") // bozza | validato | inviato | approvato
+  reportData         String?  // JSON with full report details
+  submittedAt        DateTime?
+  cerId              String
+  cer                Cer      @relation(fields: [cerId], references: [id])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ── Financial / Billing ──
+
+model Invoice {
+  id              String   @id @default(cuid())
+  invoiceNumber   String   @unique
+  memberId        String
+  member          Member   @relation(fields: [memberId], references: [id])
+  cerId           String
+  cer             Cer      @relation(fields: [cerId], references: [id])
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  period          String
+  amountEuro      Float
+  status          String   @default("emessa") // emessa | pagata | scaduta
+  dueDate         String
+  paidAt          DateTime?
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── PNRR Grants ──
+
+model PnrrGrant {
+  id                String   @id @default(cuid())
+  title             String
+  eligibleBudgetEuro Float
+  approvedEuro      Float
+  disbursedEuro     Float
+  progressPct       Float
+  nextMilestone     String?
+  cerId             String
+  cer               Cer      @relation(fields: [cerId], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ── Audit Log ──
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String
+  userId    String?
+  details   String?
+  createdAt DateTime @default(now())
+}

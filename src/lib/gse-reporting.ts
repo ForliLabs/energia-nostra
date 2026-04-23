@@ -1,4 +1,4 @@
-import type { CerMember, EnergyMonth, IncentiveShare } from "@/lib/data";
+import type { CerMember, EnergyMonth, IncentiveShareRecord } from "@/lib/data-db";
 
 export interface GseReportData {
   id: string;
@@ -32,7 +32,7 @@ export function generateGseReport(
   period: string,
   energyMonth: EnergyMonth,
   members: CerMember[],
-  incentives: IncentiveShare[],
+  incentives: IncentiveShareRecord[],
   cerName: string
 ): GseReportData {
   const checks: ValidationCheck[] = [

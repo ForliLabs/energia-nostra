@@ -1,13 +1,12 @@
-import { buildMember, memberStore, type MemberType } from "@/lib/data";
+import { getMembers, createMember, memberExistsByPod, type MemberType } from "@/lib/data-db";
 
 export const dynamic = "force-dynamic";
 
 const validTypes: MemberType[] = ["produttore", "consumatore", "prosumer"];
 
 export async function GET() {
-  const members = await memberStore.findAll();
-  const sorted = members.sort((left, right) => left.name.localeCompare(right.name, "it"));
-  return Response.json(sorted);
+  const members = await getMembers();
+  return Response.json(members);
 }
 
 export async function POST(request: Request) {
@@ -29,19 +28,16 @@ export async function POST(request: Request) {
     return Response.json({ error: "Tipologia membro non valida." }, { status: 400 });
   }
 
-  const existing = await memberStore.findAll();
-  const podCode = payload.podCode.trim().toUpperCase();
-  if (existing.some((member) => member.podCode === podCode)) {
+  if (await memberExistsByPod(payload.podCode)) {
     return Response.json({ error: "Esiste già un membro con questo POD." }, { status: 409 });
   }
 
-  const member = buildMember({
+  const member = await createMember({
     name: payload.name,
     type: payload.type,
-    podCode,
+    podCode: payload.podCode,
     energyBalanceKwh: payload.energyBalanceKwh,
   });
 
-  await memberStore.create(member);
   return Response.json(member, { status: 201 });
 }

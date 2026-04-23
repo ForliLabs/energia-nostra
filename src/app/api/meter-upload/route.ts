@@ -1,4 +1,4 @@
-import { cerMembers } from "@/lib/data";
+import { getMembers } from "@/lib/data-db";
 import { parseMeterCsv, validateMeterData } from "@/lib/meter-pipeline";
 
 export async function POST(request: Request) {
@@ -30,7 +30,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const validation = validateMeterData(records, cerMembers);
+  const members = await getMembers();
+  const validation = validateMeterData(records, members);
 
   return Response.json({
     uploadId: crypto.randomUUID().slice(0, 8),

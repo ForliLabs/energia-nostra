@@ -1,11 +1,12 @@
-import { cerMembers, memberIncentiveDistribution } from "@/lib/data";
+import { getMembers, getIncentiveDistribution } from "@/lib/data-db";
 import { getAllInvoices, getBillingStats, markInvoicePaid } from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const invoices = getAllInvoices(cerMembers, memberIncentiveDistribution);
-  const stats = getBillingStats(cerMembers, memberIncentiveDistribution);
+  const [members, incentives] = await Promise.all([getMembers(), getIncentiveDistribution()]);
+  const invoices = getAllInvoices(members, incentives);
+  const stats = getBillingStats(members, incentives);
   return Response.json({ invoices, stats });
 }
 

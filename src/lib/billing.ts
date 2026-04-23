@@ -1,4 +1,4 @@
-import type { CerMember, IncentiveShare } from "@/lib/data";
+import type { CerMember, IncentiveShareRecord } from "@/lib/data-db";
 
 export interface InvoiceRecord {
   id: string;
@@ -34,7 +34,7 @@ export interface BillingStats {
 const invoices = new Map<string, InvoiceRecord>();
 let seeded = false;
 
-function ensureSeeded(members: CerMember[], incentives: IncentiveShare[]) {
+function ensureSeeded(members: CerMember[], incentives: IncentiveShareRecord[]) {
   if (seeded) return;
   seeded = true;
 
@@ -80,18 +80,18 @@ function ensureSeeded(members: CerMember[], incentives: IncentiveShare[]) {
   }
 }
 
-export function getAllInvoices(members: CerMember[], incentives: IncentiveShare[]): InvoiceRecord[] {
+export function getAllInvoices(members: CerMember[], incentives: IncentiveShareRecord[]): InvoiceRecord[] {
   ensureSeeded(members, incentives);
   return Array.from(invoices.values()).sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 }
 
-export function getInvoicesByMember(memberId: string, members: CerMember[], incentives: IncentiveShare[]): InvoiceRecord[] {
+export function getInvoicesByMember(memberId: string, members: CerMember[], incentives: IncentiveShareRecord[]): InvoiceRecord[] {
   return getAllInvoices(members, incentives).filter((i) => i.memberId === memberId);
 }
 
-export function getBillingStats(members: CerMember[], incentives: IncentiveShare[]): BillingStats {
+export function getBillingStats(members: CerMember[], incentives: IncentiveShareRecord[]): BillingStats {
   const all = getAllInvoices(members, incentives);
   const paid = all.filter((i) => i.status === "pagata");
   const overdue = all.filter((i) => i.status === "scaduta");
@@ -118,7 +118,7 @@ export function markInvoicePaid(invoiceId: string): InvoiceRecord | null {
 export function generateInvoicesForPeriod(
   period: string,
   members: CerMember[],
-  incentives: IncentiveShare[]
+  incentives: IncentiveShareRecord[]
 ): InvoiceRecord[] {
   ensureSeeded(members, incentives);
   const generated: InvoiceRecord[] = [];

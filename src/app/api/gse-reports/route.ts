@@ -1,13 +1,19 @@
-import { cerMembers, cerProfile, energyData, memberIncentiveDistribution } from "@/lib/data";
+import { getMembers, getCerProfile, getEnergyData, getIncentiveDistribution } from "@/lib/data-db";
 import { generateGseReport, exportGseCsv, exportGseXml } from "@/lib/gse-reporting";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const period = searchParams.get("period") || energyData[energyData.length - 1].label;
-  const format = searchParams.get("format"); // csv | xml | json
-
+  const format = searchParams.get("format");
+  
+  const [members, cer, energyData, incentives] = await Promise.all([
+    getMembers(), getCerProfile(), getEnergyData(), getIncentiveDistribution(),
+  ]);
+  
+  const period = searchParams.get("period") || energyData[energyData.length - 1]?.label || "";
   const energyMonth = energyData.find((m) => m.label === period) || energyData[energyData.length - 1];
-  const report = generateGseReport(period, energyMonth, cerMembers, memberIncentiveDistribution, cerProfile.name);
+  const report = generateGseReport(period, energyMonth, members, incentives, cer.name);
 
   if (format === "csv") {
     const csv = exportGseCsv(report);

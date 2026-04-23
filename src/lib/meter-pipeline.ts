@@ -1,4 +1,4 @@
-import type { CerMember } from "@/lib/data";
+import type { CerMember } from "@/lib/data-db";
 
 export interface MeterRecord {
   podCode: string;

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EnergiaNostra — Offline</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #fffbeb; color: #78350f; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; }
+    .container { text-align: center; max-width: 400px; }
+    .icon { font-size: 4rem; margin-bottom: 1rem; }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; color: #92400e; }
+    p { color: #a16207; margin-bottom: 1.5rem; line-height: 1.6; }
+    button { background: #d97706; color: white; border: none; padding: 0.75rem 2rem; border-radius: 0.75rem; font-size: 1rem; cursor: pointer; }
+    button:hover { background: #b45309; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">⚡</div>
+    <h1>Sei offline</h1>
+    <p>EnergiaNostra non riesce a connettersi al server. Controlla la tua connessione e riprova.</p>
+    <p>I dati della tua CER saranno disponibili appena tornerai online.</p>
+    <button onclick="location.reload()">Riprova</button>
+  </div>
+</body>
+</html>

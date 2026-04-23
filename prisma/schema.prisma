@@ -267,3 +267,312 @@ model AuditLog {
   details   String?
   createdAt DateTime @default(now())
 }
+
+// ══════════════════════════════════════════════════════
+// ── Iteration 2 Models ──
+// ══════════════════════════════════════════════════════
+
+// ── Energy Forecasting (Feature 2) ──
+
+model EnergyForecast {
+  id               String   @id @default(cuid())
+  cerId            String
+  forecastType     String   // production | consumption | shared_energy
+  periodStart      String
+  periodEnd        String
+  forecastedKwh    Float
+  confidenceLow    Float
+  confidenceHigh   Float
+  actualKwh        Float?
+  accuracy         Float?
+  model            String   @default("linear_seasonal")
+  weatherData      String?  // JSON: temperature, cloud cover, irradiance
+  createdAt        DateTime @default(now())
+}
+
+model WeatherCache {
+  id          String   @id @default(cuid())
+  latitude    Float
+  longitude   Float
+  date        String
+  tempC       Float
+  cloudCover  Float
+  irradiance  Float
+  source      String   @default("open-meteo")
+  fetchedAt   DateTime @default(now())
+
+  @@unique([latitude, longitude, date])
+}
+
+// ── P2P Energy Trading (Feature 5) ──
+
+model EnergyOffer {
+  id            String   @id @default(cuid())
+  sellerId      String
+  sellerName    String
+  cerId         String
+  kwh           Float
+  pricePerKwh   Float
+  minPrice      Float?
+  validFrom     String
+  validTo       String
+  status        String   @default("open") // open | matched | expired | cancelled
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trades        TradeMatch[]
+}
+
+model TradeMatch {
+  id            String   @id @default(cuid())
+  offerId       String
+  offer         EnergyOffer @relation(fields: [offerId], references: [id])
+  buyerId       String
+  buyerName     String
+  kwhTraded     Float
+  pricePerKwh   Float
+  totalEuro     Float
+  status        String   @default("pending") // pending | settled | disputed
+  settledAt     DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model TradingAccount {
+  id            String   @id @default(cuid())
+  memberId      String   @unique
+  memberName    String
+  balanceEuro   Float    @default(0)
+  totalBought   Float    @default(0)
+  totalSold     Float    @default(0)
+  totalKwhBought Float   @default(0)
+  totalKwhSold  Float    @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+// ── Document Generation & E-Signature (Feature 6) ──
+
+model DocumentTemplate {
+  id            String   @id @default(cuid())
+  name          String
+  category      String   // atto_constitutivo | statuto | regolamento | verbale | contratto_adesione
+  content       String   // Template with {{placeholders}}
+  version       Int      @default(1)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  generated     GeneratedDocument[]
+}
+
+model GeneratedDocument {
+  id            String   @id @default(cuid())
+  templateId    String
+  template      DocumentTemplate @relation(fields: [templateId], references: [id])
+  cerId         String
+  title         String
+  content       String
+  status        String   @default("draft") // draft | review | signing | signed | archived
+  generatedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  signatures    SignatureRequest[]
+}
+
+model SignatureRequest {
+  id            String   @id @default(cuid())
+  documentId    String
+  document      GeneratedDocument @relation(fields: [documentId], references: [id])
+  signerName    String
+  signerEmail   String
+  status        String   @default("pending") // pending | sent | signed | rejected
+  signedAt      DateTime?
+  otpCode       String?
+  otpExpiresAt  DateTime?
+  createdAt     DateTime @default(now())
+}
+
+// ── Gamification (Feature 7) ──
+
+model Achievement {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String
+  icon        String   @default("🏆")
+  category    String   // energy | community | environment | consistency
+  criteria    String   // JSON: { type, threshold, ... }
+  points      Int      @default(10)
+  createdAt   DateTime @default(now())
+
+  earned      MemberAchievement[]
+}
+
+model MemberAchievement {
+  id            String   @id @default(cuid())
+  memberId      String
+  memberName    String
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id])
+  earnedAt      DateTime @default(now())
+  notified      Boolean  @default(false)
+
+  @@unique([memberId, achievementId])
+}
+
+model Challenge {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  type        String   // reduction | shift | production
+  targetValue Float
+  unit        String   @default("kWh")
+  startDate   String
+  endDate     String
+  status      String   @default("active") // active | completed | expired
+  cerId       String
+  createdAt   DateTime @default(now())
+
+  participants ChallengeParticipant[]
+}
+
+model ChallengeParticipant {
+  id            String   @id @default(cuid())
+  challengeId   String
+  challenge     Challenge @relation(fields: [challengeId], references: [id])
+  memberId      String
+  memberName    String
+  currentValue  Float    @default(0)
+  completed     Boolean  @default(false)
+  joinedAt      DateTime @default(now())
+
+  @@unique([challengeId, memberId])
+}
+
+// ── Open API & Webhooks (Feature 8) ──
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  name        String
+  keyHash     String   @unique
+  keyPrefix   String   // First 8 chars for display
+  scopes      String   // JSON array of allowed scopes
+  rateLimit   Int      @default(100) // requests per minute
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  usageLogs   ApiUsageLog[]
+}
+
+model ApiUsageLog {
+  id        String   @id @default(cuid())
+  apiKeyId  String
+  apiKey    ApiKey   @relation(fields: [apiKeyId], references: [id])
+  endpoint  String
+  method    String
+  status    Int
+  latencyMs Int
+  createdAt DateTime @default(now())
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  url         String
+  events      String   // JSON array of event types
+  secret      String   // For payload signing
+  isActive    Boolean  @default(true)
+  createdBy   String
+  failCount   Int      @default(0)
+  lastDelivery DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deliveries  WebhookDelivery[]
+}
+
+model WebhookDelivery {
+  id              String   @id @default(cuid())
+  subscriptionId  String
+  subscription    WebhookSubscription @relation(fields: [subscriptionId], references: [id])
+  event           String
+  payload         String   // JSON
+  status          String   @default("pending") // pending | delivered | failed
+  responseCode    Int?
+  attempts        Int      @default(0)
+  nextRetry       DateTime?
+  createdAt       DateTime @default(now())
+}
+
+// ── Carbon Credit Marketplace (Feature 9) ──
+
+model CarbonCredit {
+  id              String   @id @default(cuid())
+  cerId           String
+  cerName         String
+  vintage         String   // Year of emission avoidance
+  co2Tonnes       Float
+  methodology     String   @default("ISO-14064")
+  verificationStatus String @default("pending") // pending | verified | certified | retired
+  registryId      String?  // External registry reference
+  pricePerTonne   Float?
+  status          String   @default("available") // available | reserved | sold | retired
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  transactions    CarbonTransaction[]
+}
+
+model CarbonTransaction {
+  id          String   @id @default(cuid())
+  creditId    String
+  credit      CarbonCredit @relation(fields: [creditId], references: [id])
+  buyerName   String
+  buyerType   String   // business | individual | municipality
+  tonnes      Float
+  pricePerTonne Float
+  totalEuro   Float
+  status      String   @default("pending") // pending | completed | cancelled
+  certificateId String?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+// ── Multi-Language (Feature 10) ──
+
+model TranslationKey {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  namespace   String   @default("common") // common | dashboard | auth | energy | billing
+  description String?
+  createdAt   DateTime @default(now())
+
+  translations Translation[]
+}
+
+model Translation {
+  id            String   @id @default(cuid())
+  keyId         String
+  translationKey TranslationKey @relation(fields: [keyId], references: [id])
+  locale        String   // it | es | fr | en
+  value         String
+  isVerified    Boolean  @default(false)
+  updatedAt     DateTime @updatedAt
+
+  @@unique([keyId, locale])
+}
+
+model CountryConfig {
+  id                  String   @id @default(cuid())
+  countryCode         String   @unique // IT | ES | FR
+  countryName         String
+  incentiveFormula    String   // JSON: formula definition
+  reportingFormat     String   // GSE | CNMC | ENEDIS
+  gridEmissionFactor  Float    // gCO2/kWh
+  regulatoryReference String
+  currency            String   @default("EUR")
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}

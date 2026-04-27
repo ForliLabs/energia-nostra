@@ -18,6 +18,12 @@ model User {
   fiscalCode     String?
   cerId          String?
   cer            Cer?     @relation(fields: [cerId], references: [id])
+  spidId         String?  @unique // SPID subject identifier
+  cieId          String?  @unique // CIE identifier
+  authProvider   String   @default("local") // local | spid | cie
+  lastLoginAt    DateTime?
+  failedAttempts Int      @default(0)
+  lockedUntil    DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -25,14 +31,26 @@ model User {
   votes          BallotCast[]
   invoices       Invoice[]
   meterUploads   MeterUpload[]
+  notifications  Notification[]
+  pushSubscriptions PushSubscription[]
+  dashboardLayout   DashboardLayout?
+  payments       Payment[]
+  storageObjects StorageObject[]
+  importJobs     ImportJob[]
+  notificationPreferences NotificationPreference[]
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  expiresAt DateTime
-  createdAt DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id])
+  expiresAt    DateTime
+  refreshToken String?  @unique
+  refreshExpiresAt DateTime?
+  ipAddress    String?
+  userAgent    String?
+  csrfToken    String?
+  createdAt    DateTime @default(now())
 }
 
 // ── CER (Community) ──
@@ -238,6 +256,8 @@ model Invoice {
   description     String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  payments        Payment[]
 }
 
 // ── PNRR Grants ──
@@ -575,4 +595,166 @@ model CountryConfig {
   isActive            Boolean  @default(true)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
+}
+
+// ══════════════════════════════════════════════════════
+// ── Iteration 3 Models ──
+// ══════════════════════════════════════════════════════
+
+// ── Notifications (Feature 6) ──
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // vote_opened | invoice_due | anomaly_detected | trade_matched | achievement_earned | document_signed
+  title     String
+  body      String
+  actionUrl String?
+  read      Boolean  @default(false)
+  channel   String   @default("in_app") // in_app | push | email
+  cerId     String?
+  createdAt DateTime @default(now())
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, endpoint])
+}
+
+model NotificationPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  category  String   // billing | voting | energy | trading | governance | gamification
+  pushEnabled  Boolean @default(true)
+  emailEnabled Boolean @default(true)
+  inAppEnabled Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, category])
+}
+
+// ── Payments (Feature 5) ──
+
+model Payment {
+  id              String   @id @default(cuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id])
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id])
+  provider        String   // stripe | pagopa | manual
+  providerPaymentId String? // Stripe payment_intent ID or PagoPA IUV
+  amount          Float
+  currency        String   @default("EUR")
+  status          String   @default("pending") // pending | processing | succeeded | failed | refunded
+  paymentMethod   String?  // card | sepa_debit | pagopa_notice
+  receiptUrl      String?
+  refundedAt      DateTime?
+  failureReason   String?
+  metadata        String?  // JSON
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model PaymentMandate {
+  id              String   @id @default(cuid())
+  memberId        String
+  provider        String   // stripe
+  providerMandateId String?
+  type            String   // sepa_debit
+  status          String   @default("pending") // pending | active | cancelled | failed
+  bankLast4       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── File Storage (Feature 7) ──
+
+model StorageObject {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  bucket      String   @default("energia-nostra")
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  category    String   // atti | verbali | fatture | report | contatori | contratti | profile
+  cerId       String?
+  uploadedBy  String
+  user        User     @relation(fields: [uploadedBy], references: [id])
+  version     Int      @default(1)
+  parentId    String?  // For versioning - points to original
+  isPublic    Boolean  @default(false)
+  deletedAt   DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ── Data Import (Feature 9) ──
+
+model ImportJob {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  cerId         String
+  type          String   // members | energy_data | financial
+  fileName      String
+  totalRows     Int      @default(0)
+  processedRows Int      @default(0)
+  successRows   Int      @default(0)
+  errorRows     Int      @default(0)
+  status        String   @default("pending") // pending | mapping | validating | importing | completed | failed | rolled_back
+  columnMapping String?  // JSON: { sourceColumn: targetField }
+  errors        String?  // JSON array of row errors
+  rollbackData  String?  // JSON for undo capability
+  dryRun        Boolean  @default(false)
+  completedAt   DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ── Dashboard Customization (Feature 10) ──
+
+model DashboardLayout {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id])
+  layout    String   // JSON: array of widget configs { id, type, position, size, visible, config }
+  tourCompleted Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Observability (Feature 8) ──
+
+model HealthMetric {
+  id          String   @id @default(cuid())
+  route       String
+  method      String
+  statusCode  Int
+  latencyMs   Int
+  errorMessage String?
+  userId      String?
+  traceId     String?
+  createdAt   DateTime @default(now())
+}
+
+// ── Events (Feature 4) ──
+
+model DomainEvent {
+  id          String   @id @default(cuid())
+  type        String   // vote.cast | trade.matched | meter.uploaded | anomaly.detected | invoice.generated | achievement.earned | document.signed
+  payload     String   // JSON
+  cerId       String?
+  userId      String?
+  processed   Boolean  @default(false)
+  createdAt   DateTime @default(now())
 }

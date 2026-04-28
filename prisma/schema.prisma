@@ -758,3 +758,510 @@ model DomainEvent {
   processed   Boolean  @default(false)
   createdAt   DateTime @default(now())
 }
+
+// ══════════════════════════════════════════════════════
+// ── Iteration 4 Models ──
+// ══════════════════════════════════════════════════════
+
+// ── Multi-Tenant SaaS Platform (Feature 2) ──
+
+model Tenant {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  cerId           String?  @unique
+  status          String   @default("active") // active | suspended | archived | provisioning
+  plan            String   @default("starter") // starter | professional | enterprise
+  customDomain    String?  @unique
+  logoUrl         String?
+  primaryColor    String   @default("#d97706")
+  secondaryColor  String   @default("#92400e")
+  maxMembers      Int      @default(50)
+  storageQuotaMb  Int      @default(1024)
+  apiCallsLimit   Int      @default(10000)
+  billingEmail    String?
+  suspendedReason String?
+  trialEndsAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  usageRecords    TenantUsage[]
+  invitations     TenantInvitation[]
+}
+
+model TenantUsage {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  period        String   // YYYY-MM
+  memberCount   Int      @default(0)
+  apiCalls      Int      @default(0)
+  storageMb     Float    @default(0)
+  eventsCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, period])
+}
+
+model TenantInvitation {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  email       String
+  role        String   @default("member") // admin | member
+  token       String   @unique
+  status      String   @default("pending") // pending | accepted | expired
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+}
+
+// ── AI Energy Optimization Engine (Feature 1) ──
+
+model OptimizationModel {
+  id            String   @id @default(cuid())
+  cerId         String
+  modelType     String   // prophet | arima | lstm
+  targetType    String   // production | consumption | shared_energy
+  parameters    String   // JSON: model hyperparameters
+  metrics       String?  // JSON: { mape, rmse, r2 }
+  artifactKey   String?  // S3 key for serialized model
+  status        String   @default("training") // training | active | deprecated
+  trainedAt     DateTime?
+  dataPointCount Int     @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model EnergyRecommendation {
+  id            String   @id @default(cuid())
+  memberId      String
+  cerId         String
+  type          String   // shift_load | reduce_peak | charge_battery | discharge_battery
+  title         String
+  message       String
+  applianceType String?  // washing_machine | dishwasher | ev_charger | hvac
+  suggestedStart String  // HH:MM
+  suggestedEnd   String  // HH:MM
+  potentialSavingsEuro Float
+  potentialSharedKwh   Float
+  date          String   // YYYY-MM-DD
+  status        String   @default("pending") // pending | sent | followed | ignored | expired
+  sentAt        DateTime?
+  followedAt    DateTime?
+  createdAt     DateTime @default(now())
+}
+
+model OptimizationResult {
+  id            String   @id @default(cuid())
+  cerId         String
+  date          String   // YYYY-MM-DD
+  totalPredictedKwh     Float
+  totalActualKwh        Float?
+  sharedEnergyPredicted Float
+  sharedEnergyActual    Float?
+  savingsVsBaseline     Float?  // Euro improvement from optimization
+  memberSchedules       String  // JSON: per-member optimal schedules
+  weatherData           String? // JSON: weather conditions used
+  createdAt     DateTime @default(now())
+}
+
+// ── ARERA Regulatory Compliance (Feature 3) ──
+
+model RegulatoryRule {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  name            String
+  category        String   // incentive_rate | threshold | deadline | reporting
+  parameter       String   // JSON: { key, value, unit }
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  source          String   // ARERA deliberation reference
+  description     String?
+  previousRuleId  String?  // For versioning chain
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ComplianceDeadline {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  category        String   // gse_submission | arera_reporting | pnrr_milestone | tax_cu | annual_bilancio
+  dueDate         DateTime
+  recurringRule   String?  // JSON: { frequency: "monthly", dayOfMonth: 15 }
+  cerId           String?
+  status          String   @default("upcoming") // upcoming | due_soon | overdue | completed | skipped
+  completedAt     DateTime?
+  completedBy     String?
+  remindersSent   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model RegulatoryChange {
+  id              String   @id @default(cuid())
+  source          String   // arera | gse | mise
+  title           String
+  summary         String
+  deliberationRef String?  // e.g., "Deliberazione 727/2022/R/eel"
+  publishedAt     DateTime
+  effectiveAt     DateTime?
+  impactLevel     String   @default("medium") // low | medium | high | critical
+  affectedRules   String?  // JSON: array of RegulatoryRule codes affected
+  impactAnalysis  String?  // JSON: per-CER impact calculations
+  status          String   @default("detected") // detected | analyzed | applied | dismissed
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Smart Grid Device Integration (Feature 4) ──
+
+model SmartDevice {
+  id              String   @id @default(cuid())
+  cerId           String
+  name            String
+  type            String   // ev_charger | battery | solar_inverter | smart_meter | smart_thermostat
+  protocol        String   // ocpp_16 | ocpp_201 | sunspec_modbus | api | mqtt
+  manufacturer    String?
+  model           String?
+  serialNumber    String?  @unique
+  firmwareVersion String?
+  status          String   @default("offline") // online | offline | charging | discharging | error | maintenance
+  lastHeartbeat   DateTime?
+  configuration   String?  // JSON: device-specific config
+  locationDesc    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  telemetry       DeviceTelemetry[]
+  commands        DeviceCommand[]
+  chargingSessions ChargingSession[]
+}
+
+model DeviceTelemetry {
+  id          String   @id @default(cuid())
+  deviceId    String
+  device      SmartDevice @relation(fields: [deviceId], references: [id])
+  metric      String   // power_w | energy_kwh | soc_pct | temperature_c | voltage_v | current_a
+  value       Float
+  unit        String
+  timestamp   DateTime @default(now())
+}
+
+model DeviceCommand {
+  id          String   @id @default(cuid())
+  deviceId    String
+  device      SmartDevice @relation(fields: [deviceId], references: [id])
+  command     String   // start_charging | stop_charging | set_charge_limit | set_discharge | reboot
+  parameters  String?  // JSON
+  status      String   @default("pending") // pending | sent | acknowledged | completed | failed
+  result      String?  // JSON
+  sentAt      DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model ChargingSession {
+  id              String   @id @default(cuid())
+  deviceId        String
+  device          SmartDevice @relation(fields: [deviceId], references: [id])
+  transactionId   String?  @unique // OCPP transaction ID
+  idTag           String?  // RFID/auth tag
+  startTime       DateTime
+  endTime         DateTime?
+  energyKwh       Float    @default(0)
+  maxPowerKw      Float?
+  status          String   @default("active") // active | completed | error
+  solarPct        Float?   // % of energy from solar
+  costEuro        Float?
+  createdAt       DateTime @default(now())
+}
+
+model DemandResponseEvent {
+  id              String   @id @default(cuid())
+  cerId           String
+  eventId         String   @unique // OpenADR event ID
+  source          String   // terna | e_distribuzione | custom
+  type            String   // load_reduction | load_increase | price_signal
+  signalLevel     Int      // 0-3 (OpenADR signal levels)
+  startTime       DateTime
+  endTime         DateTime
+  targetKw        Float?
+  actualKw        Float?
+  status          String   @default("received") // received | acknowledged | active | completed | opt_out
+  revenueEuro     Float?
+  participatingDevices String? // JSON: array of device IDs
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── CER Simulation & ROI Calculator (Feature 5) ──
+
+model Simulation {
+  id              String   @id @default(cuid())
+  name            String
+  location        String   // Municipality
+  latitude        Float
+  longitude       Float
+  memberCount     Int
+  producerCount   Int
+  consumerCount   Int
+  prosumerCount   Int
+  solarKwp        Float
+  batteryKwh      Float    @default(0)
+  annualConsumptionKwh Float
+  roofAreaSqm     Float?
+  buildingType    String?  // residential | commercial | mixed | industrial
+  results         String?  // JSON: simulation results
+  monteCarloRuns  Int      @default(1000)
+  status          String   @default("pending") // pending | running | completed | failed
+  createdBy       String?
+  completedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model SimulationScenario {
+  id              String   @id @default(cuid())
+  simulationId    String
+  name            String
+  parameters      String   // JSON: scenario-specific overrides
+  results         String?  // JSON: scenario results
+  createdAt       DateTime @default(now())
+}
+
+// ── Automated GSE Portal Integration (Feature 6) ──
+
+model GseSubmission {
+  id              String   @id @default(cuid())
+  cerId           String
+  reportId        String?
+  period          String
+  type            String   // monthly_report | annual_report | pod_update | incentive_claim
+  status          String   @default("pending") // pending | submitting | submitted | confirmed | rejected | error
+  submissionRef   String?  // GSE confirmation number
+  receiptUrl      String?  // S3 key for confirmation PDF
+  errorDetails    String?
+  attempts        Int      @default(0)
+  lastAttemptAt   DateTime?
+  confirmedAt     DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model GseReconciliation {
+  id                String   @id @default(cuid())
+  cerId             String
+  period            String
+  platformIncentive Float   // What platform calculated
+  gseIncentive      Float   // What GSE actually paid
+  discrepancyEuro   Float
+  discrepancyPct    Float
+  status            String  @default("pending") // pending | matched | discrepancy | disputed | resolved
+  resolution        String? // Explanation of resolution
+  resolvedAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ── Community Engagement & Social (Feature 7) ──
+
+model CommunityPost {
+  id          String   @id @default(cuid())
+  cerId       String
+  authorId    String
+  authorName  String
+  type        String   // milestone | achievement | challenge | announcement | discussion
+  title       String?
+  content     String
+  metadata    String?  // JSON: milestone data, stats, etc.
+  likesCount  Int      @default(0)
+  isPinned    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reactions   PostReaction[]
+  comments    PostComment[]
+}
+
+model PostReaction {
+  id        String   @id @default(cuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id])
+  userId    String
+  emoji     String   @default("👍") // 👍 ⚡ 🌱 🎉 ❤️
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+}
+
+model PostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id])
+  authorId  String
+  authorName String
+  content   String
+  createdAt DateTime @default(now())
+}
+
+model DirectMessage {
+  id          String   @id @default(cuid())
+  cerId       String
+  senderId    String
+  senderName  String
+  recipientId String
+  content     String
+  read        Boolean  @default(false)
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model Referral {
+  id            String   @id @default(cuid())
+  cerId         String
+  referrerId    String
+  referrerName  String
+  inviteCode    String   @unique
+  inviteeEmail  String?
+  inviteeName   String?
+  status        String   @default("pending") // pending | clicked | registered | active
+  rewardEuro    Float    @default(10)
+  rewardIssued  Boolean  @default(false)
+  registeredAt  DateTime?
+  createdAt     DateTime @default(now())
+}
+
+// ── Financial Reconciliation & Tax (Feature 9) ──
+
+model BankTransaction {
+  id              String   @id @default(cuid())
+  cerId           String
+  externalId      String?  // Bank transaction reference
+  date            DateTime
+  description     String
+  amountEuro      Float
+  direction       String   // credit | debit
+  counterparty    String?
+  bankName        String?
+  importBatchId   String?
+  matchedInvoiceId String?
+  matchConfidence  Float?  // 0-1 confidence of auto-match
+  status          String   @default("unmatched") // unmatched | matched | confirmed | excluded
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model TaxDocument {
+  id              String   @id @default(cuid())
+  cerId           String
+  memberId        String?
+  memberName      String?
+  type            String   // cu | bilancio | f24 | modello_770
+  fiscalYear      Int
+  totalIncome     Float?
+  totalWithholding Float?
+  netAmount       Float?
+  documentData    String?  // JSON: structured tax document data
+  pdfUrl          String?  // S3 key
+  status          String   @default("draft") // draft | generated | sent | confirmed
+  generatedAt     DateTime?
+  sentAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model ReconciliationRule {
+  id              String   @id @default(cuid())
+  cerId           String
+  name            String
+  type            String   // auto_match | reminder | late_fee | escalation
+  conditions      String   // JSON: matching conditions
+  actions         String   // JSON: actions to take
+  priority        Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Developer Platform & Marketplace (Feature 10) ──
+
+model OAuthApp {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  developerName   String
+  developerEmail  String
+  clientId        String   @unique
+  clientSecretHash String
+  redirectUris    String   // JSON array
+  scopes          String   // JSON array
+  logoUrl         String?
+  websiteUrl      String?
+  privacyUrl      String?
+  status          String   @default("pending") // pending | approved | suspended | rejected
+  isPublished     Boolean  @default(false)
+  installCount    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  authorizations  OAuthAuthorization[]
+}
+
+model OAuthAuthorization {
+  id              String   @id @default(cuid())
+  appId           String
+  app             OAuthApp @relation(fields: [appId], references: [id])
+  userId          String
+  cerId           String?
+  scopes          String   // JSON: granted scopes
+  authorizationCode String? @unique
+  accessToken     String?  @unique
+  refreshToken    String?  @unique
+  codeExpiresAt   DateTime?
+  tokenExpiresAt  DateTime?
+  revokedAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model MarketplacePlugin {
+  id              String   @id @default(cuid())
+  name            String
+  slug            String   @unique
+  description     String
+  longDescription String?
+  category        String   // accounting | smart_home | energy_retail | analytics | reporting
+  version         String   @default("1.0.0")
+  developerName   String
+  appId           String?  // Link to OAuthApp
+  iconUrl         String?
+  screenshotUrls  String?  // JSON array
+  pricing         String   @default("free") // free | paid | freemium
+  priceEuro       Float?
+  installCount    Int      @default(0)
+  rating          Float?
+  reviewCount     Int      @default(0)
+  isVerified      Boolean  @default(false)
+  isPublished     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  installations   PluginInstallation[]
+}
+
+model PluginInstallation {
+  id          String   @id @default(cuid())
+  pluginId    String
+  plugin      MarketplacePlugin @relation(fields: [pluginId], references: [id])
+  cerId       String
+  installedBy String
+  config      String?  // JSON: plugin-specific configuration
+  status      String   @default("active") // active | disabled | uninstalled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([pluginId, cerId])
+}

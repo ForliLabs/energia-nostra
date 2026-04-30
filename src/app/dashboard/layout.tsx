@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { BarChart3, Coins, FileText, Home, Receipt, ShieldCheck, Upload, Users, Vote, TrendingUp, ArrowLeftRight, FilePen, Trophy, Key, Leaf, CreditCard, Bell, HardDrive, FileSpreadsheet, LayoutDashboard } from "lucide-react";
+import { BarChart3, Coins, FileText, Home, Receipt, ShieldCheck, Upload, Users, Vote, TrendingUp, ArrowLeftRight, FilePen, Trophy, Key, Leaf, CreditCard, Bell, HardDrive, FileSpreadsheet, LayoutDashboard, Brain, Building2, Scale, Plug, Calculator, FileCheck, Heart, Smartphone, Banknote, Code } from "lucide-react";
 import { DashboardShell } from "@/components/dashboard";
 
 const items = [
@@ -25,6 +25,17 @@ const items = [
   { label: "Importa Dati", href: "/dashboard/import", icon: <FileSpreadsheet className="h-5 w-5" /> },
   { label: "API & Webhook", href: "/dashboard/api-platform", icon: <Key className="h-5 w-5" /> },
   { label: "Personalizza", href: "/dashboard/customize", icon: <LayoutDashboard className="h-5 w-5" /> },
+  // ── Iteration 4 ──
+  { label: "Multi-Tenant", href: "/dashboard/multi-tenant", icon: <Building2 className="h-5 w-5" /> },
+  { label: "AI Ottimizzazione", href: "/dashboard/ai-optimization", icon: <Brain className="h-5 w-5" /> },
+  { label: "Compliance ARERA", href: "/dashboard/arera-compliance", icon: <Scale className="h-5 w-5" /> },
+  { label: "Smart Grid", href: "/dashboard/smart-grid", icon: <Plug className="h-5 w-5" /> },
+  { label: "Simulatore CER", href: "/dashboard/simulation", icon: <Calculator className="h-5 w-5" /> },
+  { label: "Portale GSE", href: "/dashboard/gse-portal", icon: <FileCheck className="h-5 w-5" /> },
+  { label: "Community", href: "/dashboard/community", icon: <Heart className="h-5 w-5" /> },
+  { label: "PWA Offline", href: "/dashboard/offline-pwa", icon: <Smartphone className="h-5 w-5" /> },
+  { label: "Riconciliazione", href: "/dashboard/financial-reconciliation", icon: <Banknote className="h-5 w-5" /> },
+  { label: "Developer", href: "/dashboard/developer-platform", icon: <Code className="h-5 w-5" /> },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

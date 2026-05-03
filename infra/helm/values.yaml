@@ -1,0 +1,94 @@
+# Default values for EnergiaNostra Helm chart
+
+replicaCount: 2
+
+image:
+  repository: energianostra/energianostra
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: energianostra.it
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: energianostra-tls
+      hosts:
+        - energianostra.it
+
+resources:
+  limits:
+    cpu: "1"
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 8
+  targetCPUUtilizationPercentage: 60
+
+postgresql:
+  enabled: true
+  auth:
+    database: energianostra
+    username: energianostra
+    existingSecret: energianostra-db-secret
+  primary:
+    persistence:
+      size: 20Gi
+    resources:
+      limits:
+        cpu: "1"
+        memory: 1Gi
+      requests:
+        cpu: 250m
+        memory: 512Mi
+
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    resources:
+      limits:
+        cpu: 250m
+        memory: 256Mi
+
+env:
+  NODE_ENV: production
+  APP_URL: https://energianostra.it
+
+envSecrets:
+  - name: STRIPE_SECRET_KEY
+    secretName: energianostra-secrets
+    secretKey: stripe-secret-key
+  - name: SENDGRID_API_KEY
+    secretName: energianostra-secrets
+    secretKey: sendgrid-api-key
+  - name: SENTRY_DSN
+    secretName: energianostra-secrets
+    secretKey: sentry-dsn
+
+healthCheck:
+  path: /api/health
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  failureThreshold: 3
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

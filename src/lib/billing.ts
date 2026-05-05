@@ -1,5 +1,24 @@
+/**
+ * Billing — Invoice generation, tracking, and statistics for CER members.
+ *
+ * Generates monthly invoices based on energy incentive shares and member
+ * benefits, with a fixed CER membership fee deduction. Uses an in-memory
+ * store with demo data seeding for MVP purposes.
+ *
+ * Invoice amounts are calculated as:
+ * `net = incentiveEuro + savingsEuro − membershipFeeEuro`
+ *
+ * @module billing
+ */
+
 import type { CerMember, IncentiveShareRecord } from "@/lib/data-db";
 
+/**
+ * A CER member invoice record with itemized breakdown.
+ *
+ * Invoice numbers follow the pattern `EN-YYYY-NNNN`.
+ * Status values are in Italian: `"emessa"` (issued), `"pagata"` (paid), `"scaduta"` (overdue).
+ */
 export interface InvoiceRecord {
   id: string;
   invoiceNumber: string;
@@ -20,6 +39,7 @@ export interface InvoiceRecord {
   createdAt: string;
 }
 
+/** Aggregate billing statistics across all invoices. */
 export interface BillingStats {
   totalInvoiced: number;
   totalPaid: number;
@@ -80,6 +100,14 @@ function ensureSeeded(members: CerMember[], incentives: IncentiveShareRecord[]) 
   }
 }
 
+/**
+ * Get all invoices, sorted by creation date (newest first).
+ *
+ * Seeds demo data on first call if not already seeded.
+ *
+ * @param members - CER member list (used for seeding).
+ * @param incentives - Incentive share records (used for seeding).
+ */
 export function getAllInvoices(members: CerMember[], incentives: IncentiveShareRecord[]): InvoiceRecord[] {
   ensureSeeded(members, incentives);
   return Array.from(invoices.values()).sort(
@@ -87,10 +115,22 @@ export function getAllInvoices(members: CerMember[], incentives: IncentiveShareR
   );
 }
 
+/**
+ * Get invoices filtered by member ID.
+ *
+ * @param memberId - The member to filter by.
+ * @param members - CER member list.
+ * @param incentives - Incentive share records.
+ */
 export function getInvoicesByMember(memberId: string, members: CerMember[], incentives: IncentiveShareRecord[]): InvoiceRecord[] {
   return getAllInvoices(members, incentives).filter((i) => i.memberId === memberId);
 }
 
+/**
+ * Calculate aggregate billing statistics.
+ *
+ * @returns Totals for invoiced, paid, and overdue amounts with collection rate percentage.
+ */
 export function getBillingStats(members: CerMember[], incentives: IncentiveShareRecord[]): BillingStats {
   const all = getAllInvoices(members, incentives);
   const paid = all.filter((i) => i.status === "pagata");
@@ -107,6 +147,12 @@ export function getBillingStats(members: CerMember[], incentives: IncentiveShare
   };
 }
 
+/**
+ * Mark an invoice as paid.
+ *
+ * @param invoiceId - The invoice ID to update.
+ * @returns The updated invoice, or `null` if not found.
+ */
 export function markInvoicePaid(invoiceId: string): InvoiceRecord | null {
   const invoice = invoices.get(invoiceId);
   if (!invoice) return null;
@@ -115,6 +161,16 @@ export function markInvoicePaid(invoiceId: string): InvoiceRecord | null {
   return invoice;
 }
 
+/**
+ * Generate invoices for all members for a given billing period.
+ *
+ * Creates new invoices with status `"emessa"` (issued) and a 30-day due date.
+ *
+ * @param period - The billing period label (e.g., `"Mag 2025"`).
+ * @param members - All CER members.
+ * @param incentives - Current incentive share allocations.
+ * @returns Array of newly created invoices.
+ */
 export function generateInvoicesForPeriod(
   period: string,
   members: CerMember[],

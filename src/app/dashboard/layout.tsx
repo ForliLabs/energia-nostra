@@ -36,6 +36,13 @@ const items = [
   { label: "PWA Offline", href: "/dashboard/offline-pwa", icon: <Smartphone className="h-5 w-5" /> },
   { label: "Riconciliazione", href: "/dashboard/financial-reconciliation", icon: <Banknote className="h-5 w-5" /> },
   { label: "Developer", href: "/dashboard/developer-platform", icon: <Code className="h-5 w-5" /> },
+  // ── Moonshot features ──
+  { label: "VPP Federata", href: "/dashboard/vpp", icon: <Plug className="h-5 w-5" /> },
+  { label: "Digital Twin", href: "/dashboard/digital-twin", icon: <Calculator className="h-5 w-5" /> },
+  { label: "Resilience Mesh", href: "/dashboard/resilience", icon: <ShieldCheck className="h-5 w-5" /> },
+  { label: "Energy Agents", href: "/dashboard/energy-agents", icon: <Brain className="h-5 w-5" /> },
+  { label: "Capitale CER", href: "/dashboard/community-capital", icon: <Coins className="h-5 w-5" /> },
+  { label: "Federazione", href: "/dashboard/federation", icon: <Building2 className="h-5 w-5" /> },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {

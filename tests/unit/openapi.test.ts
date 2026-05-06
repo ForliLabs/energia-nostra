@@ -18,6 +18,8 @@ describe("openapi", () => {
     expect(paths).toContain("/api/metrics");
     expect(paths).toContain("/api/gdpr/export");
     expect(paths).toContain("/api/gdpr/erasure");
+    expect(paths).toContain("/api/vpp");
+    expect(paths).toContain("/api/digital-twin");
   });
 
   it("defines security schemes", () => {
@@ -40,6 +42,7 @@ describe("openapi", () => {
     expect(tagNames).toContain("CER");
     expect(tagNames).toContain("GDPR");
     expect(tagNames).toContain("System");
+    expect(tagNames).toContain("Moonshot");
   });
 
   it("has at least 10 documented endpoints", () => {

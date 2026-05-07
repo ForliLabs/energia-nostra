@@ -1,3 +1,4 @@
+import { DEFAULT_CER_ID } from "@/lib/app-config";
 import { prisma } from "@/lib/prisma";
 
 const round = (value: number, decimals = 2) => Number(value.toFixed(decimals));
@@ -13,6 +14,7 @@ export interface CerProfile {
   members: number;
   foundedYear: number;
   referenceNote: string;
+  cabinaPrimaria?: string;
 }
 
 export interface CerMember {
@@ -96,22 +98,22 @@ const calculateMemberBenefit = (type: MemberType, balance: number) => {
 
 // ── Database query functions ──
 
-export async function getCerProfile(cerId = "cer-bertinoro"): Promise<CerProfile> {
+export async function getCerProfile(cerId = DEFAULT_CER_ID): Promise<CerProfile> {
   const cer = await prisma.cer.findUnique({ where: { id: cerId }, include: { members: true } });
   if (!cer) {
     return {
       id: cerId, name: "CER Demo", territory: "", municipality: "", province: "",
-      members: 0, foundedYear: 2024, referenceNote: "",
+      members: 0, foundedYear: 2024, referenceNote: "", cabinaPrimaria: "",
     };
   }
   return {
     id: cer.id, name: cer.name, territory: cer.territory, municipality: cer.municipality,
     province: cer.province, members: cer.members.length, foundedYear: cer.foundedYear,
-    referenceNote: cer.referenceNote || "",
+    referenceNote: cer.referenceNote || "", cabinaPrimaria: cer.cabinaPrimaria || "",
   };
 }
 
-export async function getMembers(cerId = "cer-bertinoro"): Promise<CerMember[]> {
+export async function getMembers(cerId = DEFAULT_CER_ID): Promise<CerMember[]> {
   const members = await prisma.member.findMany({ where: { cerId }, orderBy: { name: "asc" } });
   return members.map((m) => ({
     id: m.id, name: m.name, type: m.type as MemberType, podCode: m.podCode,
@@ -120,7 +122,7 @@ export async function getMembers(cerId = "cer-bertinoro"): Promise<CerMember[]> 
   }));
 }
 
-export async function getEnergyData(cerId = "cer-bertinoro"): Promise<EnergyMonth[]> {
+export async function getEnergyData(cerId = DEFAULT_CER_ID): Promise<EnergyMonth[]> {
   const readings = await prisma.energyReading.findMany({ where: { cerId }, orderBy: { createdAt: "asc" } });
   return readings.map((r) => ({
     id: r.id, label: r.label, productionKwh: r.productionKwh, consumptionKwh: r.consumptionKwh,
@@ -129,7 +131,7 @@ export async function getEnergyData(cerId = "cer-bertinoro"): Promise<EnergyMont
   }));
 }
 
-export async function getEnergySummary(cerId = "cer-bertinoro") {
+export async function getEnergySummary(cerId = DEFAULT_CER_ID) {
   const data = await getEnergyData(cerId);
   return data.reduce(
     (acc, month) => {
@@ -144,7 +146,7 @@ export async function getEnergySummary(cerId = "cer-bertinoro") {
   );
 }
 
-export async function getIncentiveDistribution(cerId = "cer-bertinoro"): Promise<IncentiveShareRecord[]> {
+export async function getIncentiveDistribution(cerId = DEFAULT_CER_ID): Promise<IncentiveShareRecord[]> {
   const members = await getMembers(cerId);
   const shares = await prisma.incentiveShare.findMany({
     where: { memberId: { in: members.map((m) => m.id) } },
@@ -158,7 +160,7 @@ export async function getIncentiveDistribution(cerId = "cer-bertinoro"): Promise
   });
 }
 
-export async function getDocuments(cerId = "cer-bertinoro"): Promise<GovernanceDocument[]> {
+export async function getDocuments(cerId = DEFAULT_CER_ID): Promise<GovernanceDocument[]> {
   const docs = await prisma.document.findMany({ where: { cerId } });
   return docs.map((d) => ({
     id: d.id, title: d.title, category: d.category,
@@ -167,14 +169,14 @@ export async function getDocuments(cerId = "cer-bertinoro"): Promise<GovernanceD
   }));
 }
 
-export async function getVotes(cerId = "cer-bertinoro"): Promise<GovernanceVote[]> {
+export async function getVotes(cerId = DEFAULT_CER_ID): Promise<GovernanceVote[]> {
   const votes = await prisma.vote.findMany({ where: { cerId } });
   return votes.map((v) => ({
     id: v.id, title: v.title, scheduledAt: v.scheduledAt, quorum: v.quorum, status: v.status,
   }));
 }
 
-export async function getAnnouncements(cerId = "cer-bertinoro"): Promise<Announcement[]> {
+export async function getAnnouncements(cerId = DEFAULT_CER_ID): Promise<Announcement[]> {
   const anns = await prisma.announcement.findMany({ where: { cerId }, orderBy: { createdAt: "desc" } });
   return anns.map((a) => ({
     id: a.id, title: a.title, message: a.message, publishedAt: a.publishedAt,
@@ -189,7 +191,7 @@ export async function createMember(input: {
   municipality?: string;
   cerId?: string;
 }): Promise<CerMember> {
-  const cerId = input.cerId || "cer-bertinoro";
+  const cerId = input.cerId || DEFAULT_CER_ID;
   const cer = await prisma.cer.findUnique({ where: { id: cerId } });
   const member = await prisma.member.create({
     data: {
@@ -223,7 +225,7 @@ export function getMemberBenefitStatement(member: CerMember) {
   return `${member.name} assorbe ${Math.abs(member.energyBalanceKwh)} kWh condivisi e riduce la bolletta di circa €${member.monthlyBenefitEuro.toFixed(2)} al mese.`;
 }
 
-export async function getPnrrGrant(cerId = "cer-bertinoro") {
+export async function getPnrrGrant(cerId = DEFAULT_CER_ID) {
   const grant = await prisma.pnrrGrant.findFirst({ where: { cerId } });
   if (!grant) {
     return {

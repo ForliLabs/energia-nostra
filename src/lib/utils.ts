@@ -25,3 +25,29 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export function formatCurrency(value: number, options?: Intl.NumberFormatOptions) {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+    ...options,
+  }).format(value);
+}
+
+export function formatDate(value: string | Date, options?: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    ...options,
+  }).format(typeof value === "string" ? new Date(value) : value);
+}
+
+export function formatDateTime(value: string | Date, options?: Intl.DateTimeFormatOptions) {
+  return new Intl.DateTimeFormat("it-IT", {
+    dateStyle: "short",
+    timeStyle: "short",
+    ...options,
+  }).format(typeof value === "string" ? new Date(value) : value);
+}

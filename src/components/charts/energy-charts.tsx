@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   AreaChart,
   Area,
@@ -55,9 +56,34 @@ const savingsFormatter = (value: unknown, name: unknown) => [
 
 const selfConsumptionFormatter = (value: unknown) => [`${Number(value).toFixed(1)}%`, "Autoconsumo"];
 
+function ChartContainer({
+  label,
+  summary,
+  height,
+  children,
+}: {
+  label: string;
+  summary: string;
+  height: number;
+  children: ReactNode;
+}) {
+  return (
+    <div role="img" aria-label={label} className="w-full" style={{ height }}>
+      <p className="sr-only">{summary}</p>
+      <ResponsiveContainer width="100%" height="100%">
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 export function ProductionConsumptionChart({ data }: { data: EnergyChartData[] }) {
   return (
-    <ResponsiveContainer width="100%" height={350}>
+    <ChartContainer
+      label="Grafico produzione e consumo energia della CER"
+      summary={`Andamento di ${data.length} periodi con produzione e consumo energetico.`}
+      height={350}
+    >
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="colorProd" x1="0" y1="0" x2="0" y2="1">
@@ -98,13 +124,17 @@ export function ProductionConsumptionChart({ data }: { data: EnergyChartData[] }
           fill="url(#colorCons)"
         />
       </AreaChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
 
 export function SharedEnergyBarChart({ data }: { data: EnergyChartData[] }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ChartContainer
+      label="Grafico energia condivisa mensile"
+      summary={`Energia condivisa mensile per ${data.length} periodi.`}
+      height={300}
+    >
       <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
         <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#9ca3af" />
@@ -115,13 +145,17 @@ export function SharedEnergyBarChart({ data }: { data: EnergyChartData[] }) {
         />
         <Bar dataKey="sharedEnergyKwh" fill={COLORS.shared} radius={[6, 6, 0, 0]} name="Energia condivisa" />
       </BarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
 
 export function SavingsChart({ data }: { data: Array<{ label: string; savingsEuro: number; gseIncentiveEuro: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={300}>
+    <ChartContainer
+      label="Grafico risparmio e incentivi GSE"
+      summary={`Confronto tra risparmio bolletta e incentivo GSE per ${data.length} periodi.`}
+      height={300}
+    >
       <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
         <XAxis dataKey="label" tick={{ fontSize: 12 }} stroke="#9ca3af" />
@@ -134,13 +168,17 @@ export function SavingsChart({ data }: { data: Array<{ label: string; savingsEur
         <Bar dataKey="savingsEuro" fill={COLORS.production} radius={[4, 4, 0, 0]} stackId="a" />
         <Bar dataKey="gseIncentiveEuro" fill={COLORS.shared} radius={[4, 4, 0, 0]} stackId="a" />
       </BarChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
 
 export function MemberTypePieChart({ data }: { data: MemberBreakdown[] }) {
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <ChartContainer
+      label="Grafico distribuzione per tipologia di membro"
+      summary={`Distribuzione su ${data.length} categorie di membri.`}
+      height={250}
+    >
       <PieChart>
         <Pie
           data={data}
@@ -162,13 +200,17 @@ export function MemberTypePieChart({ data }: { data: MemberBreakdown[] }) {
           contentStyle={{ borderRadius: "12px", border: "1px solid #e5e7eb" }}
         />
       </PieChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }
 
 export function SelfConsumptionChart({ data }: { data: Array<{ label: string; selfConsumptionPct: number }> }) {
   return (
-    <ResponsiveContainer width="100%" height={250}>
+    <ChartContainer
+      label="Grafico autoconsumo condiviso"
+      summary={`Percentuale di autoconsumo per ${data.length} periodi.`}
+      height={250}
+    >
       <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="colorSelf" x1="0" y1="0" x2="0" y2="1">
@@ -185,6 +227,6 @@ export function SelfConsumptionChart({ data }: { data: Array<{ label: string; se
         />
         <Area type="monotone" dataKey="selfConsumptionPct" stroke="#22c55e" strokeWidth={2} fill="url(#colorSelf)" />
       </AreaChart>
-    </ResponsiveContainer>
+    </ChartContainer>
   );
 }

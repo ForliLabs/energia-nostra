@@ -1,24 +1,33 @@
-import { energyData, energySummary, optimizationSuggestions, cerMembers } from "@/lib/data";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { getEnergyData, getEnergySummary, getMembers, optimizationSuggestions } from "@/lib/data-db";
+import { formatCurrency } from "@/lib/utils";
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-    maximumFractionDigits: 0,
-  }).format(value);
+export const dynamic = "force-dynamic";
 
-export default function EnergyPage() {
+export default async function EnergyPage() {
+  const [energyData, energySummary, members] = await Promise.all([
+    getEnergyData(),
+    getEnergySummary(),
+    getMembers(),
+  ]);
+
+  if (energyData.length === 0) {
+    return (
+      <EmptyState
+        title="Nessun bilancio energetico disponibile"
+        description="Importa almeno un periodo di misura per generare il bilancio della comunità energetica e i suggerimenti di ottimizzazione."
+      />
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Contabilizzazione energia</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-          Bilancio energetico mensile della CER
-        </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-          Produzione, consumo e quota condivisa per gli ultimi sei mesi, con dettaglio per singolo membro e suggerimenti di ottimizzazione.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Contabilizzazione energia"
+        title="Bilancio energetico mensile della CER"
+        description="Produzione, consumo e quota condivisa per gli ultimi periodi, con dettaglio per singolo membro e suggerimenti di ottimizzazione."
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
@@ -81,7 +90,7 @@ export default function EnergyPage() {
           <div className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-100 to-lime-100 p-8 shadow-lg shadow-amber-100/40">
             <h2 className="text-2xl font-bold text-zinc-950">Segnale operativo</h2>
             <p className="mt-4 text-sm leading-6 text-zinc-700">
-              Le utenze con profilo negativo concentrano il prelievo tra le 19:00 e le 22:00. Priorità: programmazione pompe di calore, ricarica EV e cicli freddo nelle ore centrali del giorno.
+              Le utenze con profilo negativo concentrano il prelievo nelle ore serali. Priorità: programmare pompe di calore, ricarica EV e cicli freddo nella fascia 10:00–15:00.
             </p>
           </div>
         </section>
@@ -101,9 +110,9 @@ export default function EnergyPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-lime-50">
-              {cerMembers.map((member) => {
+              {members.map((member) => {
                 const quota = Math.round(
-                  (energySummary.sharedEnergyKwh / cerMembers.length) *
+                  (energySummary.sharedEnergyKwh / Math.max(members.length, 1)) *
                     (member.type === "produttore" ? 1.28 : member.type === "prosumer" ? 1.08 : 0.82)
                 );
                 return (
@@ -116,7 +125,7 @@ export default function EnergyPage() {
                     <td className="py-4 pr-4 text-zinc-600">{quota.toLocaleString("it-IT")} kWh</td>
                     <td className="py-4 text-zinc-600">
                       {member.type === "consumatore"
-                        ? "Spostare carichi programmabili nella fascia 10:00-15:00."
+                        ? "Spostare carichi programmabili nella fascia 10:00–15:00."
                         : "Mantenere continuità di produzione e condivisione con il gruppo."}
                     </td>
                   </tr>

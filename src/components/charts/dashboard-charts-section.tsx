@@ -1,27 +1,28 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { EnergyMonth } from "@/lib/data";
+import type { EnergyMonth } from "@/lib/data-db";
+import { Skeleton } from "@/components/ui/skeleton";
 
 // Dynamic import to avoid SSR issues with recharts
 const ProductionConsumptionChart = dynamic(
   () => import("./energy-charts").then((mod) => mod.ProductionConsumptionChart),
-  { ssr: false, loading: () => <div className="flex h-[350px] items-center justify-center text-sm text-zinc-400">Caricamento grafico...</div> }
+  { ssr: false, loading: () => <Skeleton className="h-[350px] w-full" /> }
 );
 
 const SharedEnergyBarChart = dynamic(
   () => import("./energy-charts").then((mod) => mod.SharedEnergyBarChart),
-  { ssr: false, loading: () => <div className="flex h-[300px] items-center justify-center text-sm text-zinc-400">Caricamento grafico...</div> }
+  { ssr: false, loading: () => <Skeleton className="h-[300px] w-full" /> }
 );
 
 const SavingsChart = dynamic(
   () => import("./energy-charts").then((mod) => mod.SavingsChart),
-  { ssr: false, loading: () => <div className="flex h-[300px] items-center justify-center text-sm text-zinc-400">Caricamento grafico...</div> }
+  { ssr: false, loading: () => <Skeleton className="h-[300px] w-full" /> }
 );
 
 const SelfConsumptionChart = dynamic(
   () => import("./energy-charts").then((mod) => mod.SelfConsumptionChart),
-  { ssr: false, loading: () => <div className="flex h-[250px] items-center justify-center text-sm text-zinc-400">Caricamento grafico...</div> }
+  { ssr: false, loading: () => <Skeleton className="h-[250px] w-full" /> }
 );
 
 interface Props {

@@ -14,7 +14,7 @@ import { FeatureCard, FeatureGrid } from "@/components/features";
 import { Footer } from "@/components/footer";
 import { Hero } from "@/components/hero";
 import { Navbar } from "@/components/navbar";
-import { cerProfile, gseReportingStatus, latestEnergyMonth } from "@/lib/data";
+import { getCerProfile, getEnergyData, gseReportingStatus } from "@/lib/data-db";
 
 const navItems = [
   { label: "Funzionalità", href: "#funzionalita" },
@@ -57,7 +57,12 @@ const features = [
   },
 ];
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const [cerProfile, energyData] = await Promise.all([getCerProfile(), getEnergyData()]);
+  const latestEnergyMonth = energyData[energyData.length - 1];
+
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar
@@ -111,13 +116,13 @@ export default function Home() {
                 <div className="rounded-2xl bg-amber-50 p-5">
                   <p className="text-sm font-medium text-zinc-500">Energia condivisa ultimo mese</p>
                   <p className="mt-2 text-2xl font-bold text-zinc-950">
-                    {latestEnergyMonth.sharedEnergyKwh.toLocaleString("it-IT")} kWh
+                    {latestEnergyMonth ? `${latestEnergyMonth.sharedEnergyKwh.toLocaleString("it-IT")} kWh` : "In attesa di dati"}
                   </p>
                 </div>
                 <div className="rounded-2xl bg-lime-50 p-5">
                   <p className="text-sm font-medium text-zinc-500">Beneficio economico mensile</p>
                   <p className="mt-2 text-2xl font-bold text-zinc-950">
-                    €{latestEnergyMonth.savingsEuro.toLocaleString("it-IT")}
+                    {latestEnergyMonth ? `€${latestEnergyMonth.savingsEuro.toLocaleString("it-IT")}` : "—"}
                   </p>
                 </div>
               </div>

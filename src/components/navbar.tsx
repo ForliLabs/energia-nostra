@@ -49,7 +49,9 @@ export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
         <button
           className="rounded-md p-1 text-lime-950 md:hidden"
           onClick={() => setOpen(!open)}
-          aria-label="Apri menu"
+          aria-controls="mobile-navigation"
+          aria-expanded={open}
+          aria-label={open ? "Chiudi menu" : "Apri menu"}
           type="button"
         >
           <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -62,7 +64,7 @@ export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
         </button>
       </div>
 
-      <div className={cn("border-t border-amber-100 md:hidden", open ? "block" : "hidden")}>
+      <div id="mobile-navigation" className={cn("border-t border-amber-100 md:hidden", open ? "block" : "hidden")}>
         <div className="space-y-1 px-4 py-3">
           {items.map((item) => (
             <Link

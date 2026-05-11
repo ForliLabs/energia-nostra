@@ -1,9 +1,9 @@
-import { getSessionFromCookie } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getSessionFromCookie();
+  const session = await getCurrentSession();
   if (!session) {
     return Response.json({ user: null }, { status: 401 });
   }

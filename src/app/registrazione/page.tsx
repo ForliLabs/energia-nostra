@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { useToast } from "@/components/ui/toast-provider";
 
 const navItems = [
   { label: "Home", href: "/" },
@@ -13,6 +14,7 @@ const navItems = [
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { showToast } = useToast();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,8 +23,27 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
+
+    if (name.trim().length < 3) {
+      setError("Inserisci nome e cognome.");
+      showToast({ title: "Nome incompleto", description: "Inserisci almeno nome e cognome per creare l'account.", variant: "error" });
+      return;
+    }
+
+    if (!email.includes("@")) {
+      setError("Inserisci un indirizzo email valido.");
+      showToast({ title: "Email non valida", description: "Controlla il formato dell'indirizzo email.", variant: "error" });
+      return;
+    }
+
+    if (password.trim().length < 8) {
+      setError("La password deve avere almeno 8 caratteri.");
+      showToast({ title: "Password troppo debole", description: "Usa almeno 8 caratteri per completare la registrazione.", variant: "error" });
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const res = await fetch("/api/auth/register", {
@@ -32,12 +53,16 @@ export default function RegisterPage() {
       });
       const data: unknown = await res.json();
       if (!res.ok) {
-        setError((data as { error?: string })?.error || "Errore di registrazione.");
+        const message = (data as { error?: string })?.error || "Errore di registrazione.";
+        setError(message);
+        showToast({ title: "Registrazione non riuscita", description: message, variant: "error" });
         return;
       }
+      showToast({ title: "Account creato", description: "Benvenuto in EnergiaNostra.", variant: "success" });
       router.push("/dashboard");
     } catch {
       setError("Errore di rete.");
+      showToast({ title: "Errore di rete", description: "Non siamo riusciti a completare la registrazione.", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -46,7 +71,7 @@ export default function RegisterPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar brand="EnergiaNostra" items={navItems} />
-      <main className="flex flex-1 items-center justify-center px-4 py-16">
+      <main id="main-content" className="flex flex-1 items-center justify-center px-4 py-16">
         <div className="w-full max-w-md rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-xl shadow-amber-100/40">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Registrazione</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950">Crea il tuo account</h1>
@@ -82,7 +107,7 @@ export default function RegisterPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 className="rounded-2xl border border-lime-200 bg-amber-50/60 px-4 py-3 outline-none transition focus:border-lime-500"
                 placeholder="Minimo 6 caratteri"
-                minLength={6}
+                minLength={8}
                 required
               />
             </label>

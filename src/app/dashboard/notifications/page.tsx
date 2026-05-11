@@ -36,21 +36,24 @@ export default function NotificationsPage() {
   const [view, setView] = useState<"notifications" | "preferences">("notifications");
   const [loading, setLoading] = useState(true);
 
-  const fetchData = () => {
-    setLoading(true);
-    Promise.all([
-      fetch("/api/notifications").then(r => r.json()),
-      fetch("/api/notifications?view=unread-count").then(r => r.json()),
-      fetch("/api/notifications?view=preferences").then(r => r.json()),
-    ]).then(([notifData, countData, prefsData]) => {
+  const fetchData = async () => {
+    try {
+      const [notifData, countData, prefsData] = await Promise.all([
+        fetch("/api/notifications").then(r => r.json()),
+        fetch("/api/notifications?view=unread-count").then(r => r.json()),
+        fetch("/api/notifications?view=preferences").then(r => r.json()),
+      ]);
       setNotifications(notifData.notifications || []);
       setUnreadCount(countData.count || 0);
       setPreferences(prefsData.preferences?.categories || []);
+    } finally {
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    void fetchData();
+  }, []);
 
   const markRead = async (id: string) => {
     await fetch("/api/notifications", {

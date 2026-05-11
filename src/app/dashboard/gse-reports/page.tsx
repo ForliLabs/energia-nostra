@@ -14,7 +14,6 @@ export default function GseReportsPage() {
   const periods = ["Nov 2024", "Dic 2024", "Gen 2025", "Feb 2025", "Mar 2025", "Apr 2025"];
 
   const loadReport = useCallback(async (period: string) => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/gse-reports?period=${encodeURIComponent(period)}`);
       const data = (await res.json()) as GseReportData;
@@ -27,7 +26,11 @@ export default function GseReportsPage() {
   }, []);
 
   useEffect(() => {
-    loadReport(selectedPeriod);
+    const timer = window.setTimeout(() => {
+      void loadReport(selectedPeriod);
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [selectedPeriod, loadReport]);
 
   return (
@@ -46,7 +49,10 @@ export default function GseReportsPage() {
         {periods.map((p) => (
           <button
             key={p}
-            onClick={() => setSelectedPeriod(p)}
+            onClick={() => {
+              setLoading(true);
+              setSelectedPeriod(p);
+            }}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
               selectedPeriod === p
                 ? "bg-lime-600 text-white"

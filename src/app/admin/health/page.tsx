@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Activity, AlertTriangle, Clock, Server, Wifi, RefreshCw } from "lucide-react";
 
 interface HealthData {
@@ -18,15 +18,19 @@ export default function HealthDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [window, setWindow] = useState(60);
 
-  const fetchData = () => {
-    setLoading(true);
-    fetch(`/api/observability?window=${window}`)
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
-  };
+  const fetchData = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/observability?window=${window}`);
+      const payload = (await response.json()) as HealthData;
+      setData(payload);
+    } finally {
+      setLoading(false);
+    }
+  }, [window]);
 
-  useEffect(() => { fetchData(); }, [window]);
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   if (loading || !data) {
     return (
@@ -54,7 +58,7 @@ export default function HealthDashboardPage() {
             <option value={360}>6 ore</option>
             <option value={1440}>24 ore</option>
           </select>
-          <button onClick={fetchData} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white hover:bg-zinc-800">
+          <button onClick={() => { setLoading(true); void fetchData(); }} className="rounded-lg bg-zinc-900 px-4 py-2 text-sm text-white hover:bg-zinc-800">
             <RefreshCw className="h-4 w-4" />
           </button>
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { Wifi, WifiOff, HardDrive, RefreshCw, Download, Smartphone } from "lucide-react";
+import { Wifi, WifiOff, HardDrive, RefreshCw, Download } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface PwaStatus {
@@ -15,11 +15,10 @@ interface PwaStatus {
 export default function OfflinePwaPage() {
   const [status, setStatus] = useState<PwaStatus | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
   const [swRegistered, setSwRegistered] = useState(false);
 
   useEffect(() => {
-    setIsOnline(navigator.onLine);
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);

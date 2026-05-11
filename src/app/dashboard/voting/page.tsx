@@ -48,7 +48,11 @@ export default function VotingPage() {
   }, []);
 
   useEffect(() => {
-    loadVotes();
+    const timer = window.setTimeout(() => {
+      void loadVotes();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadVotes]);
 
   const handleCastVote = async (voteId: string, choice: string) => {

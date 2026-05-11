@@ -39,7 +39,11 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadData]);
 
   const handleMarkPaid = async (invoiceId: string) => {

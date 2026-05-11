@@ -39,7 +39,7 @@ export function useEventStream(options: UseEventStreamOptions = {}) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onEventRef = useRef(onEvent);
-  onEventRef.current = onEvent;
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (eventSourceRef.current) {
@@ -89,11 +89,19 @@ export function useEventStream(options: UseEventStreamOptions = {}) {
             ...prev,
             reconnectCount: prev.reconnectCount + 1,
           }));
-          connect();
+          connectRef.current();
         }, reconnectDelayMs);
       }
     };
   }, [cerId, eventTypes, autoReconnect, reconnectDelayMs]);
+
+  useEffect(() => {
+    onEventRef.current = onEvent;
+  }, [onEvent]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   const disconnect = useCallback(() => {
     if (reconnectTimeoutRef.current) {

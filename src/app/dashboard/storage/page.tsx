@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Folder, FileText, Upload, Download, Trash2, Search, HardDrive, RefreshCw } from "lucide-react";
 
 interface FolderSummary {
@@ -42,25 +42,28 @@ export default function StoragePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
 
-  const fetchData = () => {
-    setLoading(true);
+  const fetchData = useCallback(async () => {
     const params = new URLSearchParams();
     if (selectedCategory) params.set("category", selectedCategory);
     if (searchQuery) params.set("search", searchQuery);
 
-    Promise.all([
-      fetch("/api/storage?view=folders").then(r => r.json()),
-      fetch(`/api/storage?${params}`).then(r => r.json()),
-      fetch("/api/storage?view=stats").then(r => r.json()),
-    ]).then(([foldersData, filesData, statsData]) => {
+    try {
+      const [foldersData, filesData, statsData] = await Promise.all([
+        fetch("/api/storage?view=folders").then(r => r.json()),
+        fetch(`/api/storage?${params}`).then(r => r.json()),
+        fetch("/api/storage?view=stats").then(r => r.json()),
+      ]);
       setFolders(foldersData.folders || []);
       setFiles(filesData.files || []);
       setStats(statsData.stats || null);
+    } finally {
       setLoading(false);
-    }).catch(() => setLoading(false));
-  };
+    }
+  }, [searchQuery, selectedCategory]);
 
-  useEffect(() => { fetchData(); }, [selectedCategory]);
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -120,7 +123,10 @@ export default function StoragePage() {
         <h2 className="text-lg font-semibold text-lime-950 mb-4">Cartelle</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <button
-            onClick={() => setSelectedCategory(null)}
+            onClick={() => {
+              setLoading(true);
+              setSelectedCategory(null);
+            }}
             className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${!selectedCategory ? "border-lime-300 bg-lime-50" : "border-lime-100 bg-white hover:bg-lime-50/50"}`}
           >
             <Folder className="h-8 w-8 text-lime-500" />
@@ -132,7 +138,10 @@ export default function StoragePage() {
           {folders.map((folder) => (
             <button
               key={folder.category}
-              onClick={() => setSelectedCategory(folder.category)}
+              onClick={() => {
+                setLoading(true);
+                setSelectedCategory(folder.category);
+              }}
               className={`flex items-center gap-3 rounded-2xl border p-4 text-left transition-colors ${selectedCategory === folder.category ? "border-lime-300 bg-lime-50" : "border-lime-100 bg-white hover:bg-lime-50/50"}`}
             >
               <span className="text-2xl">{folder.icon}</span>
@@ -152,7 +161,10 @@ export default function StoragePage() {
           type="text"
           placeholder="Cerca file per nome..."
           value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
+          onChange={(e) => {
+            setLoading(true);
+            setSearchQuery(e.target.value);
+          }}
           className="w-full rounded-xl border border-zinc-200 bg-white pl-10 pr-4 py-2.5 text-sm focus:border-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-100"
         />
       </div>

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { EmptyState } from "@/components/ui/empty-state";
+import { useToast } from "@/components/ui/toast-provider";
 
 type BuildingType = "condominio" | "borgo-rurale" | "azienda-agricola" | "scuola";
 type RoofAvailability = "ampia" | "parziale" | "limitata";
@@ -48,12 +50,13 @@ const formatCurrency = (value: number) =>
   }).format(value);
 
 export default function AssessmentPage() {
-  const [address, setAddress] = useState("Bertinoro, Via della Rocca 12");
+  const { showToast } = useToast();
+  const [address, setAddress] = useState("");
   const [buildingType, setBuildingType] = useState<BuildingType>("condominio");
   const [potentialMembers, setPotentialMembers] = useState(18);
   const [currentEnergyCosts, setCurrentEnergyCosts] = useState(36000);
   const [roofAvailability, setRoofAvailability] = useState<RoofAvailability>("parziale");
-  const [showResults, setShowResults] = useState(true);
+  const [showResults, setShowResults] = useState(false);
   const [pvgisData, setPvgisData] = useState<{
     annualProductionKwh: number;
     optimalTilt: number;
@@ -62,6 +65,7 @@ export default function AssessmentPage() {
     location: { latitude: number; longitude: number; elevation: number };
   } | null>(null);
   const [pvgisLoading, setPvgisLoading] = useState(false);
+  const [pvgisError, setPvgisError] = useState<string | null>(null);
 
   const results = useMemo(() => {
     const membersFactor = Math.min(0.16 + potentialMembers * 0.006, 0.34);
@@ -97,16 +101,28 @@ export default function AssessmentPage() {
   }, [buildingType, currentEnergyCosts, potentialMembers, roofAvailability, pvgisData]);
 
   const fetchPvgisData = async () => {
+    if (!address.trim()) {
+      const message = "Inserisci un indirizzo prima di avviare l'analisi solare.";
+      setPvgisError(message);
+      showToast({ title: "Indirizzo mancante", description: message, variant: "error" });
+      return;
+    }
+
     setPvgisLoading(true);
+    setPvgisError(null);
     try {
       const peakPower = Math.round(potentialMembers * 0.5 * roofFactors[roofAvailability]);
       const res = await fetch(`/api/pvgis?address=${encodeURIComponent(address)}&peakPower=${peakPower}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPvgisData(data);
+      if (!res.ok) {
+        throw new Error("Analisi PVGIS non disponibile in questo momento.");
       }
+      const data = await res.json();
+      setPvgisData(data);
+      showToast({ title: "Analisi solare completata", description: "Abbiamo aggiornato la stima con i dati PVGIS.", variant: "success" });
     } catch {
-      // PVGIS data is optional
+      const message = "Analisi PVGIS temporaneamente non disponibile. Puoi proseguire con la stima preliminare.";
+      setPvgisError(message);
+      showToast({ title: "Analisi solare non disponibile", description: message, variant: "error" });
     } finally {
       setPvgisLoading(false);
     }
@@ -121,7 +137,7 @@ export default function AssessmentPage() {
         ctaHref="/dashboard"
       />
 
-      <main className="flex-1 py-12 sm:py-16">
+      <main id="main-content" className="flex-1 py-12 sm:py-16">
         <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8">
           <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-xl shadow-amber-100/40 sm:p-10">
             <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">
@@ -138,7 +154,18 @@ export default function AssessmentPage() {
               className="mt-8 grid gap-5"
               onSubmit={(event) => {
                 event.preventDefault();
+                if (!address.trim()) {
+                  const message = "Inserisci un indirizzo o una località per ottenere il risultato.";
+                  showToast({ title: "Compila l'indirizzo", description: message, variant: "error" });
+                  return;
+                }
+                if (potentialMembers < 2 || currentEnergyCosts < 1000) {
+                  const message = "Controlla numero membri e costi energetici prima di generare l'assessment.";
+                  showToast({ title: "Dati incompleti", description: message, variant: "error" });
+                  return;
+                }
                 setShowResults(true);
+                showToast({ title: "Assessment aggiornato", description: "Ecco la stima preliminare della tua CER.", variant: "success" });
               }}
             >
               <label className="grid gap-2">
@@ -150,6 +177,7 @@ export default function AssessmentPage() {
                   placeholder="Es. Bertinoro, Via del Sole 8"
                   required
                 />
+                <span className="text-xs text-zinc-500">Inserisci un indirizzo reale oppure un&apos;area della tua comunità per ottenere una stima preliminare.</span>
               </label>
 
               <label className="grid gap-2">
@@ -225,7 +253,7 @@ export default function AssessmentPage() {
           </section>
 
           <aside className="space-y-6">
-            {showResults && (
+            {showResults ? (
               <div className="rounded-3xl border border-lime-200 bg-lime-950 p-8 text-white shadow-xl shadow-lime-200/40">
                 <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-200">
                   Risultati preliminari
@@ -257,7 +285,14 @@ export default function AssessmentPage() {
                   Avvia la formazione della CER
                 </Link>
               </div>
+            ) : (
+              <EmptyState
+                title="Compila i campi per vedere il risultato"
+                description="L'assessment parte da un modulo vuoto per evitare risultati precompilati. Inserisci i dati della tua CER e genera la stima quando sei pronto."
+              />
             )}
+
+            {pvgisError ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{pvgisError}</p> : null}
 
             {pvgisData && (
               <div className="rounded-3xl border border-lime-200 bg-white/90 p-8 shadow-xl shadow-lime-100/40">

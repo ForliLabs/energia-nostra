@@ -1,27 +1,32 @@
-import { getTemplates, generateDocument, requestSignatures, verifyAndSign, getGeneratedDocuments } from "@/lib/documents";
+import { generateDocument, getGeneratedDocuments, getTemplates, requestSignatures, verifyAndSign } from "@/lib/documents";
+import { getCurrentSession, hasRequiredRole, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
-  const view = searchParams.get("view"); // templates | documents
+  const session = await getCurrentSession();
+  const cerId = resolveSessionCerId(session, searchParams.get("cerId"));
+  const view = searchParams.get("view");
 
   if (view === "templates") {
     const templates = await getTemplates();
     return Response.json({ templates });
   }
 
-  const documents = await getGeneratedDocuments(cerId);
-  const templates = await getTemplates();
+  const [documents, templates] = await Promise.all([getGeneratedDocuments(cerId), getTemplates()]);
   return Response.json({ documents, templates });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as {
+  const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Accedi per gestire il workflow documentale." }, { status: 401 });
+  }
+
+  const body = (await request.json()) as {
     action?: string;
     templateId?: string;
-    cerId?: string;
     variables?: Record<string, string>;
     documentId?: string;
     signers?: Array<{ name: string; email: string }>;
@@ -30,18 +35,25 @@ export async function POST(request: Request) {
   };
 
   if (body.action === "generate") {
+    if (!hasRequiredRole(session, ["admin", "auditor", "superadmin"])) {
+      return Response.json({ error: "Permessi insufficienti per generare documenti." }, { status: 403 });
+    }
     if (!body.templateId) {
       return Response.json({ error: "Template richiesto." }, { status: 400 });
     }
-    const doc = await generateDocument({
+
+    const document = await generateDocument({
       templateId: body.templateId,
-      cerId: body.cerId || "cer-bertinoro",
+      cerId: resolveSessionCerId(session),
       variables: body.variables || {},
     });
-    return Response.json(doc, { status: 201 });
+    return Response.json(document, { status: 201 });
   }
 
   if (body.action === "request-signatures") {
+    if (!hasRequiredRole(session, ["admin", "auditor", "superadmin"])) {
+      return Response.json({ error: "Permessi insufficienti per avviare la firma." }, { status: 403 });
+    }
     if (!body.documentId || !body.signers?.length) {
       return Response.json({ error: "Document ID e firmatari richiesti." }, { status: 400 });
     }

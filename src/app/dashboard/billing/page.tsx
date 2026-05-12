@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import type { InvoiceRecord, BillingStats } from "@/lib/billing";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { BillingStats, InvoiceRecord } from "@/lib/billing";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/components/ui/toast-provider";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
@@ -19,20 +22,29 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function BillingPage() {
+  const { showToast } = useToast();
   const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
   const [stats, setStats] = useState<BillingStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "emessa" | "pagata" | "scaduta">("all");
-  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const res = await fetch("/api/invoices");
-      const data = (await res.json()) as { invoices: InvoiceRecord[]; stats: BillingStats };
-      setInvoices(data.invoices);
-      setStats(data.stats);
-    } catch {
-      // keep existing
+      const response = await fetch("/api/invoices");
+      const data = (await response.json()) as { error?: string; invoices?: InvoiceRecord[]; stats?: BillingStats };
+      if (!response.ok) {
+        throw new Error(data.error || "Impossibile caricare la fatturazione.");
+      }
+      setInvoices(data.invoices || []);
+      setStats(data.stats || null);
+      setSelectedInvoiceId((current) => current || data.invoices?.[0]?.id || null);
+    } catch (caughtError) {
+      setError((caughtError as Error).message);
     } finally {
       setLoading(false);
     }
@@ -46,38 +58,77 @@ export default function BillingPage() {
     return () => window.clearTimeout(timer);
   }, [loadData]);
 
-  const handleMarkPaid = async (invoiceId: string) => {
+  const filteredInvoices = useMemo(
+    () => (filter === "all" ? invoices : invoices.filter((invoice) => invoice.status === filter)),
+    [filter, invoices],
+  );
+
+  const selectedInvoice = useMemo(
+    () => filteredInvoices.find((invoice) => invoice.id === selectedInvoiceId) || invoices.find((invoice) => invoice.id === selectedInvoiceId) || null,
+    [filteredInvoices, invoices, selectedInvoiceId],
+  );
+
+  const runInvoiceAction = async (invoiceId: string, action: "mark-paid" | "simulate" | "pagopa-notice") => {
+    setBusyAction(action);
     try {
-      const res = await fetch("/api/invoices", {
+      const response = await fetch(action === "mark-paid" ? "/api/invoices" : "/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "mark-paid", invoiceId }),
+        body: JSON.stringify(
+          action === "mark-paid"
+            ? { action, invoiceId }
+            : action === "simulate"
+              ? { action, invoiceId, provider: "stripe" }
+              : { action, invoiceId },
+        ),
       });
-      if (res.ok) {
-        loadData();
+      const data = (await response.json()) as { error?: string; iuv?: string };
+      if (!response.ok) {
+        throw new Error(data.error || "Azione non completata.");
       }
-    } catch {
-      // ignore
+
+      if (action === "pagopa-notice") {
+        showToast({
+          title: "Avviso PagoPA generato",
+          description: data.iuv ? `IUV ${data.iuv} pronto per la condivisione con il membro.` : "Avviso creato correttamente.",
+          variant: "success",
+        });
+      } else {
+        showToast({
+          title: action === "simulate" ? "Pagamento simulato" : "Pagamento registrato",
+          description: action === "simulate"
+            ? "Lo storico pagamenti è stato aggiornato con l'incasso simulato."
+            : "La fattura è stata aggiornata come pagata.",
+          variant: "success",
+        });
+      }
+
+      await loadData();
+    } catch (caughtError) {
+      showToast({ title: "Operazione non riuscita", description: (caughtError as Error).message, variant: "error" });
+    } finally {
+      setBusyAction(null);
     }
   };
 
-  const filtered = filter === "all" ? invoices : invoices.filter((i) => i.status === filter);
-
   return (
     <div className="space-y-8">
-      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Fatturazione e pagamenti</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-          Gestione finanziaria della CER
-        </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-          Prospetti economici mensili, stato pagamenti, e dettaglio per singolo membro con breakdown incentivi, risparmi e quota associativa.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Fatturazione e pagamenti"
+        title="Gestione finanziaria della CER"
+        description="Monitora lo stato delle fatture, registra gli incassi e prepara il membro al canale di pagamento più adatto senza uscire dal dettaglio economico."
+      />
 
-      {loading && <p className="text-sm text-zinc-500">Caricamento dati finanziari...</p>}
+      {loading && !stats ? <p className="text-sm text-zinc-500">Caricamento dati finanziari...</p> : null}
+      {error && !stats ? (
+        <EmptyState
+          title="Impossibile caricare la fatturazione"
+          description={error}
+          action={<button onClick={() => void loadData()} className="rounded-2xl bg-lime-600 px-4 py-2 text-sm font-semibold text-white">Riprova</button>}
+        />
+      ) : null}
 
-      {stats && (
+      {stats ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
             <p className="text-sm font-medium text-zinc-500">Totale fatturato</p>
@@ -102,69 +153,81 @@ export default function BillingPage() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
-        {(["all", "emessa", "pagata", "scaduta"] as const).map((f) => (
+        {(["all", "emessa", "pagata", "scaduta"] as const).map((value) => (
           <button
-            key={f}
-            onClick={() => setFilter(f)}
+            key={value}
+            onClick={() => setFilter(value)}
             className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-              filter === f
-                ? "bg-lime-600 text-white"
-                : "border border-lime-200 bg-white text-zinc-700 hover:bg-lime-50"
+              filter === value ? "bg-lime-600 text-white" : "border border-lime-200 bg-white text-zinc-700 hover:bg-lime-50"
             }`}
           >
-            {f === "all" ? "Tutte" : statusLabels[f]} ({f === "all" ? invoices.length : invoices.filter((i) => i.status === f).length})
+            {value === "all" ? "Tutte" : statusLabels[value]} ({value === "all" ? invoices.length : invoices.filter((invoice) => invoice.status === value).length})
           </button>
         ))}
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">
-          <h2 className="text-2xl font-bold text-zinc-950">Elenco fatture</h2>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-zinc-950">Elenco fatture</h2>
+              <p className="mt-2 text-sm text-zinc-600">Apri una fattura per vedere il breakdown economico e il prossimo passo di pagamento.</p>
+            </div>
+            <button onClick={() => void loadData()} className="rounded-2xl border border-lime-200 px-4 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-lime-50">
+              Aggiorna
+            </button>
+          </div>
+
           <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full divide-y divide-lime-100 text-sm">
-              <thead>
-                <tr className="text-left text-zinc-500">
-                  <th className="pb-3 pr-4 font-semibold">N. Fattura</th>
-                  <th className="pb-3 pr-4 font-semibold">Membro</th>
-                  <th className="pb-3 pr-4 font-semibold">Periodo</th>
-                  <th className="pb-3 pr-4 font-semibold">Importo</th>
-                  <th className="pb-3 pr-4 font-semibold">Stato</th>
-                  <th className="pb-3 font-semibold">Azioni</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-lime-50">
-                {filtered.slice(0, 20).map((inv) => (
-                  <tr key={inv.id} className="cursor-pointer hover:bg-lime-50/50" onClick={() => setSelectedInvoice(inv)}>
-                    <td className="py-3 pr-4 font-mono text-xs text-zinc-600">{inv.invoiceNumber}</td>
-                    <td className="py-3 pr-4 font-semibold text-zinc-950">{inv.memberName}</td>
-                    <td className="py-3 pr-4 text-zinc-600">{inv.period}</td>
-                    <td className="py-3 pr-4 font-semibold text-zinc-950">{formatCurrency(inv.amountEuro)}</td>
-                    <td className="py-3 pr-4">
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses[inv.status] || ""}`}>
-                        {statusLabels[inv.status] || inv.status}
-                      </span>
-                    </td>
-                    <td className="py-3">
-                      {inv.status !== "pagata" && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleMarkPaid(inv.id); }}
-                          className="text-xs font-semibold text-lime-700 hover:underline"
-                        >
-                          Segna pagata
-                        </button>
-                      )}
-                    </td>
+            {filteredInvoices.length === 0 ? (
+              <EmptyState
+                title="Nessuna fattura nel filtro selezionato"
+                description="Prova a cambiare stato oppure genera il nuovo ciclo di fatturazione dopo la chiusura del periodo energetico."
+              />
+            ) : (
+              <table className="min-w-full divide-y divide-lime-100 text-sm">
+                <thead>
+                  <tr className="text-left text-zinc-500">
+                    <th className="pb-3 pr-4 font-semibold">N. Fattura</th>
+                    <th className="pb-3 pr-4 font-semibold">Membro</th>
+                    <th className="pb-3 pr-4 font-semibold">Periodo</th>
+                    <th className="pb-3 pr-4 font-semibold">Importo</th>
+                    <th className="pb-3 pr-4 font-semibold">Stato</th>
+                    <th className="pb-3 font-semibold">Dettaglio</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-lime-50">
+                  {filteredInvoices.slice(0, 20).map((invoice) => (
+                    <tr key={invoice.id} className={selectedInvoiceId === invoice.id ? "bg-lime-50/60" : undefined}>
+                      <td className="py-3 pr-4 font-mono text-xs text-zinc-600">{invoice.invoiceNumber}</td>
+                      <td className="py-3 pr-4 font-semibold text-zinc-950">{invoice.memberName}</td>
+                      <td className="py-3 pr-4 text-zinc-600">{invoice.period}</td>
+                      <td className="py-3 pr-4 font-semibold text-zinc-950">{formatCurrency(invoice.amountEuro)}</td>
+                      <td className="py-3 pr-4">
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses[invoice.status] || ""}`}>
+                          {statusLabels[invoice.status] || invoice.status}
+                        </span>
+                      </td>
+                      <td className="py-3">
+                        <button
+                          onClick={() => setSelectedInvoiceId(invoice.id)}
+                          className="rounded-xl border border-lime-200 px-3 py-1.5 text-xs font-semibold text-zinc-700 transition hover:bg-lime-50"
+                        >
+                          Apri dettaglio
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
-        {selectedInvoice && (
+        {selectedInvoice ? (
           <section className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">
             <h2 className="text-2xl font-bold text-zinc-950">Dettaglio fattura</h2>
             <div className="mt-6 space-y-4">
@@ -194,9 +257,18 @@ export default function BillingPage() {
                 </div>
               </div>
 
+              <div className="rounded-2xl bg-white p-4 ring-1 ring-lime-100">
+                <p className="text-sm font-semibold text-zinc-700">Prossimo passo pagamento</p>
+                <p className="mt-2 text-sm leading-6 text-zinc-600">
+                  {selectedInvoice.status === "pagata"
+                    ? "Pagamento già registrato. Verifica eventuale riconciliazione nel modulo pagamenti."
+                    : "Scegli se registrare manualmente l'incasso, simulare il checkout Stripe o preparare l'avviso PagoPA per il membro."}
+                </p>
+              </div>
+
               <div className="space-y-2 text-sm text-zinc-600">
                 <p><strong>Scadenza:</strong> {selectedInvoice.dueDate}</p>
-                {selectedInvoice.paidAt && <p><strong>Pagato il:</strong> {selectedInvoice.paidAt}</p>}
+                {selectedInvoice.paidAt ? <p><strong>Pagato il:</strong> {selectedInvoice.paidAt}</p> : null}
                 <p>
                   <strong>Stato:</strong>{" "}
                   <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${statusClasses[selectedInvoice.status]}`}>
@@ -205,17 +277,36 @@ export default function BillingPage() {
                 </p>
               </div>
 
-              {selectedInvoice.status !== "pagata" && (
-                <button
-                  onClick={() => handleMarkPaid(selectedInvoice.id)}
-                  className="w-full rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700"
-                >
-                  Registra pagamento
-                </button>
-              )}
+              {selectedInvoice.status !== "pagata" ? (
+                <div className="grid gap-3">
+                  <button
+                    onClick={() => void runInvoiceAction(selectedInvoice.id, "mark-paid")}
+                    disabled={busyAction !== null}
+                    className="w-full rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700 disabled:opacity-60"
+                  >
+                    {busyAction === "mark-paid" ? "Registrazione..." : "Registra pagamento manuale"}
+                  </button>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      onClick={() => void runInvoiceAction(selectedInvoice.id, "simulate")}
+                      disabled={busyAction !== null}
+                      className="rounded-2xl border border-lime-200 bg-white px-4 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-lime-50 disabled:opacity-60"
+                    >
+                      {busyAction === "simulate" ? "Simulazione..." : "Simula incasso Stripe"}
+                    </button>
+                    <button
+                      onClick={() => void runInvoiceAction(selectedInvoice.id, "pagopa-notice")}
+                      disabled={busyAction !== null}
+                      className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      {busyAction === "pagopa-notice" ? "Creazione avviso..." : "Genera avviso PagoPA"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
-        )}
+        ) : null}
       </div>
     </div>
   );

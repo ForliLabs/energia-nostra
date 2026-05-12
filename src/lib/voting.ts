@@ -1,3 +1,6 @@
+import { DEFAULT_CER_ID } from "@/lib/app-config";
+import { prisma } from "@/lib/prisma";
+
 export interface VoteRecord {
   id: string;
   title: string;
@@ -34,156 +37,170 @@ export interface VoteResults {
   status: string;
 }
 
-// In-memory vote store
-const votes = new Map<string, VoteRecord>();
-const ballots = new Map<string, BallotRecord>();
+export function normaliseVoteOptions(options: string[]) {
+  return Array.from(new Set(options.map((option) => option.trim()).filter(Boolean)));
+}
 
-// Seed demo votes
-function ensureSeeded() {
-  if (votes.size > 0) return;
-
-  const demoVotes: VoteRecord[] = [
-    {
-      id: "vote-q2",
-      title: "Approvazione piano di distribuzione incentivi Q2 2025",
-      description: "Votazione sull'approvazione del piano di ripartizione incentivi GSE per il secondo trimestre 2025. Il piano prevede la distribuzione basata sul peso energetico e tipo membro.",
-      options: ["Approvo", "Non approvo", "Astenuto"],
-      voteType: "open",
-      quorum: "50% + 1 dei soci",
-      quorumPct: 51,
-      scheduledAt: "2025-05-20T20:45:00",
-      closesAt: "2025-05-21T23:59:00",
-      status: "aperta",
-      totalEligible: 25,
-      ballots: [],
-      createdAt: "2025-05-10T10:00:00",
-    },
-    {
-      id: "vote-pnrr",
-      title: "Scelta fornitore accumulo condiviso da 80 kWh",
-      description: "Selezione del fornitore per il sistema di accumulo energetico condiviso. Tre offerte ricevute: Sonnen, Tesla Powerwall, Huawei LUNA.",
-      options: ["Sonnen", "Tesla Powerwall", "Huawei LUNA"],
-      voteType: "secret",
-      quorum: "2/3 dei membri votanti",
-      quorumPct: 67,
-      scheduledAt: "2025-06-03T18:30:00",
-      closesAt: "2025-06-05T23:59:00",
-      status: "programmata",
-      totalEligible: 25,
-      ballots: [],
-      createdAt: "2025-05-12T10:00:00",
-    },
-    {
-      id: "vote-expansion",
-      title: "Ingresso nuovi prosumer area Santa Maria Nuova",
-      description: "Approvazione dell'ingresso di 6 nuovi prosumer dall'area di Santa Maria Nuova nella CER.",
-      options: ["Favorevole", "Contrario", "Astenuto"],
-      voteType: "open",
-      quorum: "Maggioranza semplice",
-      quorumPct: 51,
-      scheduledAt: "2025-06-12T21:00:00",
-      closesAt: "2025-06-14T23:59:00",
-      status: "programmata",
-      totalEligible: 25,
-      ballots: [],
-      createdAt: "2025-05-15T10:00:00",
-    },
-    {
-      id: "vote-statuto",
-      title: "Approvazione modifiche statuto CER",
-      description: "Ratifica delle modifiche all'articolo 12 dello statuto riguardante le modalità di recesso dei soci.",
-      options: ["Approvo", "Non approvo", "Astenuto"],
-      voteType: "open",
-      quorum: "2/3 dei soci",
-      quorumPct: 67,
-      scheduledAt: "2025-04-15T20:00:00",
-      closesAt: "2025-04-17T23:59:00",
-      status: "chiusa",
-      totalEligible: 25,
-      ballots: [],
-      createdAt: "2025-04-01T10:00:00",
-    },
-  ];
-
-  // Add demo ballots for the closed vote
-  const closedVoteBallots: BallotRecord[] = Array.from({ length: 20 }, (_, i) => ({
-    id: `ballot-${i}`,
-    voteId: "vote-statuto",
-    userId: `user-${i}`,
-    userName: `Membro ${i + 1}`,
-    choice: i < 15 ? "Approvo" : i < 18 ? "Non approvo" : "Astenuto",
-    createdAt: "2025-04-16T14:00:00",
-  }));
-
-  // Add some ballots for the open vote
-  const openVoteBallots: BallotRecord[] = Array.from({ length: 12 }, (_, i) => ({
-    id: `ballot-open-${i}`,
-    voteId: "vote-q2",
-    userId: `user-${i}`,
-    userName: `Membro ${i + 1}`,
-    choice: i < 9 ? "Approvo" : i < 11 ? "Non approvo" : "Astenuto",
-    createdAt: "2025-05-20T21:00:00",
-  }));
-
-  for (const vote of demoVotes) {
-    votes.set(vote.id, vote);
+export function deriveQuorumPct(quorum: string) {
+  const normalized = quorum.toLowerCase();
+  const explicitPercentage = normalized.match(/(\d{1,3})\s*%/);
+  if (explicitPercentage) {
+    return Math.min(100, Math.max(1, Number.parseInt(explicitPercentage[1], 10)));
   }
+  if (normalized.includes("2/3")) return 67;
+  if (normalized.includes("maggioranza semplice") || normalized.includes("50% + 1") || normalized.includes("50%+1")) return 51;
+  return 51;
+}
 
-  for (const ballot of [...closedVoteBallots, ...openVoteBallots]) {
-    ballots.set(ballot.id, ballot);
-    const vote = votes.get(ballot.voteId);
-    if (vote) vote.ballots.push(ballot);
+async function getEligibleUsers(cerId: string) {
+  return prisma.user.count({
+    where: {
+      cerId,
+      role: { in: ["member", "admin", "auditor"] },
+    },
+  });
+}
+
+function parseOptions(rawOptions: string) {
+  try {
+    const parsed = JSON.parse(rawOptions) as string[];
+    return normaliseVoteOptions(parsed);
+  } catch {
+    return normaliseVoteOptions(rawOptions.split(","));
   }
 }
 
-export function getAllVotes(): VoteRecord[] {
-  ensureSeeded();
-  return Array.from(votes.values()).sort(
-    (a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()
-  );
-}
+async function mapVote(vote: {
+  id: string;
+  title: string;
+  description: string | null;
+  options: string;
+  voteType: string;
+  quorum: string;
+  scheduledAt: string;
+  closesAt: string | null;
+  status: string;
+  createdAt: Date;
+  ballots: Array<{
+    id: string;
+    voteId: string;
+    userId: string;
+    choice: string;
+    createdAt: Date;
+    user: { name: string | null };
+  }>;
+  cerId: string;
+}): Promise<VoteRecord> {
+  const totalEligible = await getEligibleUsers(vote.cerId);
 
-export function getVoteById(id: string): VoteRecord | undefined {
-  ensureSeeded();
-  return votes.get(id);
-}
-
-export function castBallot(voteId: string, userId: string, userName: string, choice: string): BallotRecord | null {
-  ensureSeeded();
-  const vote = votes.get(voteId);
-  if (!vote || vote.status !== "aperta") return null;
-
-  // Check if already voted
-  if (vote.ballots.some((b) => b.userId === userId)) return null;
-
-  // Validate choice
-  if (!vote.options.includes(choice)) return null;
-
-  const ballot: BallotRecord = {
-    id: `ballot-${crypto.randomUUID().slice(0, 8)}`,
-    voteId,
-    userId,
-    userName,
-    choice,
-    createdAt: new Date().toISOString(),
+  return {
+    id: vote.id,
+    title: vote.title,
+    description: vote.description || "",
+    options: parseOptions(vote.options),
+    voteType: vote.voteType as VoteRecord["voteType"],
+    quorum: vote.quorum,
+    quorumPct: deriveQuorumPct(vote.quorum),
+    scheduledAt: vote.scheduledAt,
+    closesAt: vote.closesAt || vote.scheduledAt,
+    status: vote.status as VoteRecord["status"],
+    totalEligible,
+    ballots: vote.ballots
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((ballot) => ({
+        id: ballot.id,
+        voteId: ballot.voteId,
+        userId: ballot.userId,
+        userName: ballot.user.name || "Membro CER",
+        choice: ballot.choice,
+        createdAt: ballot.createdAt.toISOString(),
+      })),
+    createdAt: vote.createdAt.toISOString(),
   };
-
-  ballots.set(ballot.id, ballot);
-  vote.ballots.push(ballot);
-  return ballot;
 }
 
-export function getVoteResults(voteId: string): VoteResults | null {
-  ensureSeeded();
-  const vote = votes.get(voteId);
+export async function getAllVotes(cerId = DEFAULT_CER_ID): Promise<VoteRecord[]> {
+  const votes = await prisma.vote.findMany({
+    where: { cerId },
+    include: {
+      ballots: {
+        include: { user: true },
+      },
+    },
+    orderBy: [{ scheduledAt: "desc" }, { createdAt: "desc" }],
+  });
+
+  return Promise.all(votes.map((vote) => mapVote(vote)));
+}
+
+export async function getVoteById(id: string): Promise<VoteRecord | undefined> {
+  const vote = await prisma.vote.findUnique({
+    where: { id },
+    include: {
+      ballots: { include: { user: true } },
+    },
+  });
+
+  if (!vote) return undefined;
+  return mapVote(vote);
+}
+
+export async function castBallot(voteId: string, userId: string, userName?: string, choice?: string): Promise<BallotRecord | null> {
+  const vote = await prisma.vote.findUnique({
+    where: { id: voteId },
+    include: { ballots: true },
+  });
+
+  if (!vote || vote.status !== "aperta" || !choice) {
+    return null;
+  }
+
+  const availableOptions = parseOptions(vote.options);
+  if (!availableOptions.includes(choice)) {
+    return null;
+  }
+
+  const closesAt = vote.closesAt ? new Date(vote.closesAt) : null;
+  if (closesAt && closesAt < new Date()) {
+    return null;
+  }
+
+  try {
+    const ballot = await prisma.ballotCast.create({
+      data: {
+        voteId,
+        userId,
+        choice,
+      },
+      include: { user: true },
+    });
+
+    return {
+      id: ballot.id,
+      voteId: ballot.voteId,
+      userId: ballot.userId,
+      userName: ballot.user.name || userName || "Membro CER",
+      choice: ballot.choice,
+      createdAt: ballot.createdAt.toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getVoteResults(voteId: string): Promise<VoteResults | null> {
+  const vote = await getVoteById(voteId);
   if (!vote) return null;
 
   const totalBallots = vote.ballots.length;
   const participationPct = vote.totalEligible > 0 ? (totalBallots / vote.totalEligible) * 100 : 0;
-
-  const optionCounts = vote.options.map((option) => {
-    const count = vote.ballots.filter((b) => b.choice === option).length;
-    return { option, count, pct: totalBallots > 0 ? (count / totalBallots) * 100 : 0 };
+  const results = vote.options.map((option) => {
+    const count = vote.ballots.filter((ballot) => ballot.choice === option).length;
+    return {
+      option,
+      count,
+      pct: totalBallots > 0 ? (count / totalBallots) * 100 : 0,
+    };
   });
 
   return {
@@ -193,12 +210,12 @@ export function getVoteResults(voteId: string): VoteResults | null {
     totalEligible: vote.totalEligible,
     participationPct,
     quorumReached: participationPct >= vote.quorumPct,
-    results: optionCounts,
+    results,
     status: vote.status,
   };
 }
 
-export function createVote(input: {
+export async function createVote(input: {
   title: string;
   description: string;
   options: string[];
@@ -207,16 +224,25 @@ export function createVote(input: {
   quorumPct: number;
   scheduledAt: string;
   closesAt: string;
-}): VoteRecord {
-  ensureSeeded();
-  const vote: VoteRecord = {
-    id: `vote-${crypto.randomUUID().slice(0, 8)}`,
-    ...input,
-    status: "programmata",
-    totalEligible: 25,
-    ballots: [],
-    createdAt: new Date().toISOString(),
-  };
-  votes.set(vote.id, vote);
-  return vote;
+  cerId?: string;
+}): Promise<VoteRecord> {
+  const cerId = input.cerId || DEFAULT_CER_ID;
+  const quorum = input.quorum || `${input.quorumPct}%`;
+
+  const created = await prisma.vote.create({
+    data: {
+      title: input.title.trim(),
+      description: input.description.trim(),
+      options: JSON.stringify(normaliseVoteOptions(input.options)),
+      voteType: input.voteType,
+      quorum,
+      scheduledAt: input.scheduledAt,
+      closesAt: input.closesAt,
+      status: new Date(input.scheduledAt) > new Date() ? "programmata" : "aperta",
+      cerId,
+    },
+    include: { ballots: { include: { user: true } } },
+  });
+
+  return mapVote(created);
 }

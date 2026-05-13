@@ -1,12 +1,20 @@
 "use client";
 
-import { FileSignature, FileText, PenTool, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { FileSignature, FileText, PenTool, Search, ShieldCheck } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DocumentTemplateInfo, GeneratedDocumentInfo, SignatureInfo } from "@/lib/documents";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface DocumentsResponse {
   templates: DocumentTemplateInfo[];
   documents: GeneratedDocumentInfo[];
+}
+
+interface SessionUser {
+  name: string;
+  email: string;
 }
 
 const documentStatusClasses: Record<string, string> = {
@@ -50,10 +58,10 @@ function renderSignatureStatus(signatures: SignatureInfo[]) {
         <div key={signature.id} className="rounded-xl bg-amber-50 px-3 py-2">
           <p className="font-medium text-zinc-700">{signature.signerName}</p>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${signatureStatusClasses[signature.status] ?? "bg-amber-100 text-amber-800"}`}>
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${signatureStatusClasses[signature.status] ?? "bg-amber-100 text-amber-800"}`}>
               {signatureStatusLabels[signature.status] ?? signature.status}
             </span>
-            {signature.signedAt && <span className="text-xs text-zinc-500">{formatDate(signature.signedAt)}</span>}
+            {signature.signedAt ? <span className="text-xs text-zinc-500">{formatDate(signature.signedAt)}</span> : null}
           </div>
         </div>
       ))}
@@ -62,57 +70,126 @@ function renderSignatureStatus(signatures: SignatureInfo[]) {
 }
 
 export default function DocumentsPage() {
+  const { showToast } = useToast();
   const [data, setData] = useState<DocumentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
+  const [busyTemplateId, setBusyTemplateId] = useState<string | null>(null);
+  const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [documentsResponse, sessionResponse] = await Promise.all([fetch("/api/documents"), fetch("/api/auth/session")]);
+      const payload = (await documentsResponse.json()) as DocumentsResponse & { error?: string };
+      if (!documentsResponse.ok) {
+        throw new Error(payload.error || "Impossibile recuperare i documenti.");
+      }
+      setData({ templates: payload.templates || [], documents: payload.documents || [] });
+
+      if (sessionResponse.ok) {
+        const sessionPayload = (await sessionResponse.json()) as { user?: SessionUser };
+        setCurrentUser(sessionPayload.user || null);
+      } else {
+        setCurrentUser(null);
+      }
+    } catch (caughtError) {
+      setError((caughtError as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let active = true;
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
 
-    Promise.resolve().then(async () => {
-      try {
-        const response = await fetch("/api/documents");
-        if (!response.ok) {
-          throw new Error("Impossibile recuperare i documenti.");
-        }
-        const payload = (await response.json()) as DocumentsResponse;
-        if (active) {
-          setData(payload);
-          setError(null);
-        }
-      } catch {
-        if (active) {
-          setError("Impossibile caricare documenti e template.");
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+    return () => window.clearTimeout(timer);
+  }, [loadData]);
+
+  const filteredTemplates = useMemo(
+    () => data?.templates.filter((template) => `${template.name} ${template.category}`.toLowerCase().includes(query.toLowerCase())) || [],
+    [data, query],
+  );
+  const filteredDocuments = useMemo(
+    () => data?.documents.filter((document) => `${document.title} ${document.templateName}`.toLowerCase().includes(query.toLowerCase())) || [],
+    [data, query],
+  );
+
+  const handleGenerate = async (templateId: string) => {
+    setBusyTemplateId(templateId);
+    try {
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate", templateId }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Impossibile generare il documento.");
       }
-    });
+      showToast({ title: "Documento generato", description: "La bozza è disponibile nella lista documenti generati.", variant: "success" });
+      await loadData();
+    } catch (caughtError) {
+      showToast({ title: "Generazione non riuscita", description: (caughtError as Error).message, variant: "error" });
+    } finally {
+      setBusyTemplateId(null);
+    }
+  };
 
-    return () => {
-      active = false;
-    };
-  }, []);
+  const handleRequestSignatures = async (documentId: string) => {
+    setBusyDocumentId(documentId);
+    try {
+      const signers = [
+        { name: currentUser?.name || "Amministratore CER", email: currentUser?.email || "admin@energianostra.it" },
+        { name: "Segreteria CER", email: "segreteria@energianostra.it" },
+      ];
+      const response = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "request-signatures", documentId, signers }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Impossibile avviare la firma.");
+      }
+      showToast({ title: "Firma avviata", description: "La richiesta è stata inviata ai firmatari configurati.", variant: "success" });
+      await loadData();
+    } catch (caughtError) {
+      showToast({ title: "Invio firme non riuscito", description: (caughtError as Error).message, variant: "error" });
+    } finally {
+      setBusyDocumentId(null);
+    }
+  };
 
   return (
     <div className="space-y-8">
-      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Document workflow CER</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">Documenti &amp; Firma Digitale</h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-          Gestione template, generazione documenti e monitoraggio del processo di firma elettronica per la comunità.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Document workflow CER"
+        title="Documenti & Firma Digitale"
+        description="Dai template attivi alle firme elettroniche: i pulsanti principali ora accompagnano il team lungo tutto il flusso documentale senza passaggi manuali nascosti."
+        actions={
+          <label className="relative block w-full max-w-xs">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Cerca template o documento"
+              className="w-full rounded-2xl border border-lime-200 bg-white pl-10 pr-4 py-3 text-sm outline-none transition focus:border-lime-500"
+            />
+          </label>
+        }
+      />
 
-      {loading && !data && <p className="text-sm text-zinc-500">Caricamento...</p>}
+      {loading ? <p className="text-sm text-zinc-500">Caricamento documenti...</p> : null}
+      {error ? <EmptyState title="Impossibile caricare documenti e template" description={error} /> : null}
 
-      {error && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-      )}
-
-      {data && (
+      {data ? (
         <>
           <section className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
@@ -120,25 +197,33 @@ export default function DocumentsPage() {
               <h2 className="text-lg font-semibold text-amber-900">Template disponibili</h2>
             </div>
             <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              {data.templates.map((template) => (
-                <article key={template.id} className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-zinc-700">{template.category}</p>
-                      <h3 className="mt-2 text-lg font-semibold text-zinc-950">{template.name}</h3>
+              {filteredTemplates.length === 0 ? (
+                <div className="lg:col-span-2 xl:col-span-3">
+                  <EmptyState title="Nessun template trovato" description="Prova a cambiare ricerca per vedere i modelli disponibili nella tua CER." />
+                </div>
+              ) : (
+                filteredTemplates.map((template) => (
+                  <article key={template.id} className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-700">{template.category}</p>
+                        <h3 className="mt-2 text-lg font-semibold text-zinc-950">{template.name}</h3>
+                      </div>
+                      <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-medium text-lime-800">v{template.version}</span>
                     </div>
-                    <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-lime-100 text-lime-800">v{template.version}</span>
-                  </div>
-                  <p className="mt-4 text-sm text-zinc-600">Template attivo pronto per la generazione documentale.</p>
-                  <button
-                    type="button"
-                    className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100"
-                  >
-                    <PenTool className="h-4 w-4" />
-                    Genera da template
-                  </button>
-                </article>
-              ))}
+                    <p className="mt-4 text-sm text-zinc-600">Il documento verrà generato con variabili CER precompilate e placeholder residui risolti automaticamente.</p>
+                    <button
+                      type="button"
+                      onClick={() => void handleGenerate(template.id)}
+                      disabled={busyTemplateId !== null}
+                      className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
+                    >
+                      <PenTool className="h-4 w-4" />
+                      {busyTemplateId === template.id ? "Generazione..." : "Genera da template"}
+                    </button>
+                  </article>
+                ))
+              )}
             </div>
           </section>
 
@@ -147,34 +232,58 @@ export default function DocumentsPage() {
               <FileSignature className="h-5 w-5 text-amber-700" />
               <h2 className="text-lg font-semibold text-amber-900">Documenti generati</h2>
             </div>
-            <div className="mt-6 overflow-x-auto">
-              <table className="w-full divide-y divide-amber-100 text-sm">
-                <thead>
-                  <tr className="text-left text-zinc-500">
-                    <th className="pb-3 pr-4 font-semibold">Documento</th>
-                    <th className="pb-3 pr-4 font-semibold">Template</th>
-                    <th className="pb-3 pr-4 font-semibold">Stato</th>
-                    <th className="pb-3 pr-4 font-semibold">Firma digitale</th>
-                    <th className="pb-3 font-semibold">Generato il</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-amber-100">
-                  {data.documents.map((document: GeneratedDocumentInfo) => (
-                    <tr key={document.id} className="align-top">
-                      <td className="py-4 pr-4 font-semibold text-zinc-950">{document.title}</td>
-                      <td className="py-4 pr-4 text-zinc-700">{document.templateName}</td>
-                      <td className="py-4 pr-4">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${documentStatusClasses[document.status] ?? "bg-amber-100 text-amber-800"}`}>
-                          {documentStatusLabels[document.status] ?? document.status}
-                        </span>
-                      </td>
-                      <td className="py-4 pr-4 text-zinc-700">{renderSignatureStatus(document.signatures)}</td>
-                      <td className="py-4 text-zinc-600">{formatDate(document.generatedAt)}</td>
+            {filteredDocuments.length === 0 ? (
+              <div className="mt-6">
+                <EmptyState
+                  title="Nessun documento generato"
+                  description="Genera il primo documento da template per avviare il workflow di review e firma digitale."
+                />
+              </div>
+            ) : (
+              <div className="mt-6 overflow-x-auto">
+                <table className="w-full divide-y divide-amber-100 text-sm">
+                  <thead>
+                    <tr className="text-left text-zinc-500">
+                      <th className="pb-3 pr-4 font-semibold">Documento</th>
+                      <th className="pb-3 pr-4 font-semibold">Template</th>
+                      <th className="pb-3 pr-4 font-semibold">Stato</th>
+                      <th className="pb-3 pr-4 font-semibold">Firma digitale</th>
+                      <th className="pb-3 pr-4 font-semibold">Generato il</th>
+                      <th className="pb-3 font-semibold">Azione</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-amber-100">
+                    {filteredDocuments.map((document) => (
+                      <tr key={document.id} className="align-top">
+                        <td className="py-4 pr-4 font-semibold text-zinc-950">{document.title}</td>
+                        <td className="py-4 pr-4 text-zinc-700">{document.templateName}</td>
+                        <td className="py-4 pr-4">
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${documentStatusClasses[document.status] ?? "bg-amber-100 text-amber-800"}`}>
+                            {documentStatusLabels[document.status] ?? document.status}
+                          </span>
+                        </td>
+                        <td className="py-4 pr-4 text-zinc-700">{renderSignatureStatus(document.signatures)}</td>
+                        <td className="py-4 pr-4 text-zinc-600">{formatDate(document.generatedAt)}</td>
+                        <td className="py-4">
+                          {document.signatures.length === 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => void handleRequestSignatures(document.id)}
+                              disabled={busyDocumentId !== null}
+                              className="rounded-2xl border border-lime-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-lime-50 disabled:opacity-60"
+                            >
+                              {busyDocumentId === document.id ? "Invio..." : "Avvia firma"}
+                            </button>
+                          ) : (
+                            <span className="text-xs font-semibold text-lime-700">Firma già avviata</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
@@ -183,7 +292,7 @@ export default function DocumentsPage() {
               <h2 className="text-lg font-semibold text-amber-900">Monitor firma</h2>
             </div>
             <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              {data.documents.map((document) => (
+              {filteredDocuments.map((document) => (
                 <article key={`${document.id}-signatures`} className="rounded-2xl border border-amber-100 bg-amber-50 p-5">
                   <h3 className="font-semibold text-zinc-950">{document.title}</h3>
                   <p className="mt-2 text-sm text-zinc-600">
@@ -197,7 +306,7 @@ export default function DocumentsPage() {
             </div>
           </section>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

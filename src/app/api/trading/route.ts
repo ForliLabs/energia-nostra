@@ -1,11 +1,25 @@
-import { createOffer, getActiveOffers, acceptOffer, getTradingHistory, getTradingStats, getTradingAccounts } from "@/lib/trading";
+import {
+  TRADING_PRICE_CEILING,
+  TRADING_PRICE_FLOOR,
+  acceptOffer,
+  createOffer,
+  getActiveOffers,
+  getMemberOpenOffers,
+  getTradingAccounts,
+  getTradingHistory,
+  getTradingStats,
+} from "@/lib/trading";
+import { resolveMemberForSessionUser } from "@/lib/member-context";
+import { getCurrentSession, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
-  const view = searchParams.get("view"); // offers | history | stats | accounts
+  const session = await getCurrentSession();
+  const cerId = resolveSessionCerId(session, searchParams.get("cerId"));
+  const view = searchParams.get("view");
+  const member = session ? await resolveMemberForSessionUser(session.user, cerId) : null;
 
   if (view === "offers") {
     const offers = await getActiveOffers(cerId);
@@ -19,52 +33,89 @@ export async function GET(request: Request) {
     const accounts = await getTradingAccounts(cerId);
     return Response.json({ accounts });
   }
+  if (view === "member") {
+    if (!member) {
+      return Response.json({ member: null, myOffers: [], myAccount: null });
+    }
+    const [myOffers, accounts] = await Promise.all([getMemberOpenOffers(member.id, cerId), getTradingAccounts(cerId)]);
+    return Response.json({
+      member,
+      myOffers,
+      myAccount: accounts.find((account) => account.memberId === member.id) ?? null,
+    });
+  }
 
-  // Default: full stats
-  const stats = await getTradingStats(cerId);
-  const offers = await getActiveOffers(cerId);
-  const history = await getTradingHistory(cerId);
-  return Response.json({ stats, offers, recentTrades: history.slice(0, 10) });
+  const [stats, offers, history, accounts, myOffers] = await Promise.all([
+    getTradingStats(cerId),
+    getActiveOffers(cerId),
+    getTradingHistory(cerId),
+    getTradingAccounts(cerId),
+    member ? getMemberOpenOffers(member.id, cerId) : Promise.resolve([]),
+  ]);
+
+  return Response.json({
+    stats,
+    offers,
+    recentTrades: history.slice(0, 10),
+    member,
+    myOffers,
+    myAccount: member ? accounts.find((account) => account.memberId === member.id) ?? null : null,
+    constraints: {
+      priceFloor: TRADING_PRICE_FLOOR,
+      priceCeiling: TRADING_PRICE_CEILING,
+    },
+  });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as {
+  const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Accedi per operare sul mercato P2P." }, { status: 401 });
+  }
+
+  const body = (await request.json()) as {
     action?: string;
-    sellerId?: string;
-    sellerName?: string;
     cerId?: string;
     kwh?: number;
     pricePerKwh?: number;
     validFrom?: string;
     validTo?: string;
     offerId?: string;
-    buyerId?: string;
-    buyerName?: string;
   };
+  const cerId = resolveSessionCerId(session, body.cerId);
+  const member = await resolveMemberForSessionUser(session.user, cerId);
+
+  if (!member) {
+    return Response.json({ error: "Il tuo account non è ancora associato a un membro CER abilitato al trading." }, { status: 409 });
+  }
 
   if (body.action === "create-offer") {
-    if (!body.sellerId || !body.sellerName || !body.kwh || !body.pricePerKwh) {
-      return Response.json({ error: "Parametri mancanti per creare un'offerta." }, { status: 400 });
+    if (!body.kwh || !body.pricePerKwh) {
+      return Response.json({ error: "Quantità e prezzo sono obbligatori per creare un'offerta." }, { status: 400 });
     }
-    const offer = await createOffer({
-      sellerId: body.sellerId,
-      sellerName: body.sellerName,
-      cerId: body.cerId || "cer-bertinoro",
-      kwh: body.kwh,
-      pricePerKwh: body.pricePerKwh,
-      validFrom: body.validFrom || new Date().toISOString(),
-      validTo: body.validTo || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    });
-    return Response.json(offer, { status: 201 });
+    try {
+      const offer = await createOffer({
+        sellerId: member.id,
+        sellerName: member.name,
+        cerId,
+        kwh: body.kwh,
+        pricePerKwh: body.pricePerKwh,
+        validFrom: body.validFrom || new Date().toISOString(),
+        validTo: body.validTo || new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      return Response.json(offer, { status: 201 });
+    } catch (error) {
+      return Response.json({ error: (error as Error).message }, { status: 400 });
+    }
   }
 
   if (body.action === "accept-offer") {
-    if (!body.offerId || !body.buyerId || !body.buyerName) {
-      return Response.json({ error: "Parametri mancanti per accettare l'offerta." }, { status: 400 });
+    if (!body.offerId) {
+      return Response.json({ error: "Seleziona un'offerta da accettare." }, { status: 400 });
     }
-    const trade = await acceptOffer(body.offerId, body.buyerId, body.buyerName, body.kwh);
+    const trade = await acceptOffer(body.offerId, member.id, member.name, body.kwh);
     if (!trade) {
-      return Response.json({ error: "Impossibile accettare l'offerta." }, { status: 400 });
+      return Response.json({ error: "Impossibile accettare l'offerta selezionata." }, { status: 400 });
     }
     return Response.json(trade, { status: 201 });
   }

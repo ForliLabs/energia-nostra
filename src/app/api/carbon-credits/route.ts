@@ -1,11 +1,13 @@
-import { getCarbonDashboard, purchaseCredits, issueCredits, calculateCo2Avoidance } from "@/lib/carbon-credits";
+import { getCarbonDashboard, purchaseCredits, issueCredits, calculateCo2Avoidance, retireCredits } from "@/lib/carbon-credits";
+import { getCurrentSession, hasRequiredRole, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
-  const view = searchParams.get("view"); // avoidance | dashboard
+  const session = await getCurrentSession();
+  const cerId = resolveSessionCerId(session, searchParams.get("cerId"));
+  const view = searchParams.get("view");
 
   if (view === "avoidance") {
     const avoidance = await calculateCo2Avoidance(cerId);
@@ -17,7 +19,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as {
+  const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Accedi per gestire il portafoglio carbon credits." }, { status: 401 });
+  }
+
+  const body = (await request.json()) as {
     action?: string;
     cerId?: string;
     cerName?: string;
@@ -29,32 +36,57 @@ export async function POST(request: Request) {
     buyerType?: string;
     tonnes?: number;
   };
+  const cerId = resolveSessionCerId(session, body.cerId);
 
   if (body.action === "issue") {
-    if (!body.cerId || !body.cerName || !body.co2Tonnes) {
-      return Response.json({ error: "CER ID, nome e tonnellate CO₂ richiesti." }, { status: 400 });
+    if (!hasRequiredRole(session, ["admin", "superadmin"])) {
+      return Response.json({ error: "Solo gli amministratori possono emettere crediti carbonio." }, { status: 403 });
     }
-    const credit = await issueCredits(
-      body.cerId, body.cerName, body.vintage || String(new Date().getFullYear()),
-      body.co2Tonnes, body.pricePerTonne
-    );
-    return Response.json(credit, { status: 201 });
+    if (!body.co2Tonnes) {
+      return Response.json({ error: "Tonnellate CO₂ richieste." }, { status: 400 });
+    }
+    try {
+      const credit = await issueCredits({
+        cerId,
+        cerName: body.cerName,
+        vintage: body.vintage || String(new Date().getFullYear()),
+        co2Tonnes: body.co2Tonnes,
+        pricePerTonne: body.pricePerTonne,
+      });
+      return Response.json(credit, { status: 201 });
+    } catch (error) {
+      return Response.json({ error: (error as Error).message }, { status: 400 });
+    }
   }
 
   if (body.action === "purchase") {
-    if (!body.creditId || !body.buyerName || !body.buyerType || !body.tonnes) {
-      return Response.json({ error: "Credit ID, acquirente e tonnellate richiesti." }, { status: 400 });
+    if (!body.creditId || !body.tonnes) {
+      return Response.json({ error: "Credit ID e tonnellate richiesti." }, { status: 400 });
     }
     const tx = await purchaseCredits({
       creditId: body.creditId,
-      buyerName: body.buyerName,
-      buyerType: body.buyerType,
+      buyerName: body.buyerName || session.user.name,
+      buyerType: body.buyerType || (hasRequiredRole(session, ["admin", "superadmin"]) ? "business" : "individual"),
       tonnes: body.tonnes,
     });
     if (!tx) {
-      return Response.json({ error: "Credito non disponibile o tonnellate insufficienti." }, { status: 400 });
+      return Response.json({ error: "Credito non disponibile, non verificato o tonnellate insufficienti." }, { status: 400 });
     }
     return Response.json(tx, { status: 201 });
+  }
+
+  if (body.action === "retire") {
+    if (!hasRequiredRole(session, ["admin", "superadmin"])) {
+      return Response.json({ error: "Solo gli amministratori possono ritirare crediti dal portafoglio." }, { status: 403 });
+    }
+    if (!body.creditId) {
+      return Response.json({ error: "Credit ID richiesto." }, { status: 400 });
+    }
+    const credit = await retireCredits(body.creditId);
+    if (!credit) {
+      return Response.json({ error: "Credito non disponibile per il ritiro." }, { status: 400 });
+    }
+    return Response.json(credit);
   }
 
   return Response.json({ error: "Azione non riconosciuta." }, { status: 400 });

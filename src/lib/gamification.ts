@@ -1,5 +1,6 @@
 // Gamification & Behavioral Nudges (Feature 7)
 
+import { DEFAULT_CER_ID } from "@/lib/app-config";
 import { prisma } from "@/lib/prisma";
 
 export interface AchievementInfo {
@@ -48,37 +49,44 @@ export interface SmartNudge {
 }
 
 export async function getMemberAchievements(memberId: string): Promise<AchievementInfo[]> {
-  const allAchievements = await prisma.achievement.findMany({ orderBy: { category: "asc" } });
+  const allAchievements = await prisma.achievement.findMany({ orderBy: [{ category: "asc" }, { points: "desc" }] });
   const earned = await prisma.memberAchievement.findMany({ where: { memberId } });
-  const earnedMap = new Map(earned.map((e) => [e.achievementId, e.earnedAt]));
+  const earnedMap = new Map(earned.map((entry) => [entry.achievementId, entry.earnedAt]));
 
-  return allAchievements.map((a) => ({
-    id: a.id, code: a.code, name: a.name, description: a.description,
-    icon: a.icon, category: a.category, points: a.points,
-    earned: earnedMap.has(a.id),
-    earnedAt: earnedMap.get(a.id)?.toISOString(),
+  return allAchievements.map((achievement) => ({
+    id: achievement.id,
+    code: achievement.code,
+    name: achievement.name,
+    description: achievement.description,
+    icon: achievement.icon,
+    category: achievement.category,
+    points: achievement.points,
+    earned: earnedMap.has(achievement.id),
+    earnedAt: earnedMap.get(achievement.id)?.toISOString(),
   }));
 }
 
-export async function getLeaderboard(cerId = "cer-bertinoro"): Promise<LeaderboardEntry[]> {
+export async function getLeaderboard(cerId = DEFAULT_CER_ID): Promise<LeaderboardEntry[]> {
   const members = await prisma.member.findMany({ where: { cerId }, select: { id: true, name: true } });
-  const memberIds = members.map((m) => m.id);
-  
+  const memberIds = members.map((member) => member.id);
   const achievements = await prisma.memberAchievement.findMany({
     where: { memberId: { in: memberIds } },
     include: { achievement: true },
   });
 
-  const memberPoints = new Map<string, { points: number; count: number; name: string }>();
-  for (const a of achievements) {
-    const current = memberPoints.get(a.memberId) || { points: 0, count: 0, name: a.memberName };
-    current.points += a.achievement.points;
+  const memberPoints = new Map<string, { points: number; count: number; name: string }>(
+    members.map((member) => [member.id, { points: 0, count: 0, name: member.name }]),
+  );
+
+  for (const achievement of achievements) {
+    const current = memberPoints.get(achievement.memberId) || { points: 0, count: 0, name: achievement.memberName };
+    current.points += achievement.achievement.points;
     current.count += 1;
-    memberPoints.set(a.memberId, current);
+    memberPoints.set(achievement.memberId, current);
   }
 
   return Array.from(memberPoints.entries())
-    .sort(([, a], [, b]) => b.points - a.points)
+    .sort(([, left], [, right]) => right.points - left.points || right.count - left.count || left.name.localeCompare(right.name, "it"))
     .map(([memberId, data], index) => ({
       rank: index + 1,
       memberId,
@@ -89,20 +97,26 @@ export async function getLeaderboard(cerId = "cer-bertinoro"): Promise<Leaderboa
     }));
 }
 
-export async function getChallenges(cerId = "cer-bertinoro", memberId?: string): Promise<ChallengeInfo[]> {
+export async function getChallenges(cerId = DEFAULT_CER_ID, memberId?: string): Promise<ChallengeInfo[]> {
   const challenges = await prisma.challenge.findMany({
     where: { cerId },
     include: { participants: true },
     orderBy: { createdAt: "desc" },
   });
 
-  return challenges.map((c) => {
-    const myParticipation = memberId ? c.participants.find((p) => p.memberId === memberId) : undefined;
+  return challenges.map((challenge) => {
+    const myParticipation = memberId ? challenge.participants.find((participant) => participant.memberId === memberId) : undefined;
     return {
-      id: c.id, title: c.title, description: c.description,
-      type: c.type, targetValue: c.targetValue, unit: c.unit,
-      startDate: c.startDate, endDate: c.endDate, status: c.status,
-      participantCount: c.participants.length,
+      id: challenge.id,
+      title: challenge.title,
+      description: challenge.description,
+      type: challenge.type,
+      targetValue: challenge.targetValue,
+      unit: challenge.unit,
+      startDate: challenge.startDate,
+      endDate: challenge.endDate,
+      status: challenge.status,
+      participantCount: challenge.participants.length,
       myProgress: myParticipation?.currentValue,
       myCompleted: myParticipation?.completed,
     };
@@ -121,50 +135,43 @@ export async function joinChallenge(challengeId: string, memberId: string, membe
   return true;
 }
 
-export async function generateNudges(memberId: string): Promise<SmartNudge[]> {
+export async function generateNudges(memberId: string, cerId = DEFAULT_CER_ID): Promise<SmartNudge[]> {
   const nudges: SmartNudge[] = [];
   const memberAchievements = await prisma.memberAchievement.findMany({ where: { memberId } });
-  const allAchievements = await prisma.achievement.findMany();
-  const earnedCodes = new Set(memberAchievements.map((a) => a.achievementId));
+  const allAchievements = await prisma.achievement.findMany({ orderBy: { points: "desc" } });
+  const earnedIds = new Set(memberAchievements.map((achievement) => achievement.achievementId));
 
-  // Check for near achievements
-  const unearnedCount = allAchievements.length - earnedCodes.size;
-  if (unearnedCount > 0) {
-    const nextAchievement = allAchievements.find((a) => !earnedCodes.has(a.id));
-    if (nextAchievement) {
-      nudges.push({
-        id: `nudge-ach-${nextAchievement.code}`,
-        type: "achievement_near",
-        title: `Vicino al badge "${nextAchievement.name}"!`,
-        message: nextAchievement.description,
-        icon: nextAchievement.icon,
-      });
-    }
+  const nextAchievement = allAchievements.find((achievement) => !earnedIds.has(achievement.id));
+  if (nextAchievement) {
+    nudges.push({
+      id: `nudge-ach-${nextAchievement.code}`,
+      type: "achievement_near",
+      title: `Vicino al badge “${nextAchievement.name}”`,
+      message: nextAchievement.description,
+      icon: nextAchievement.icon,
+    });
   }
 
-  // Consumption shift suggestion
   nudges.push({
     id: "nudge-shift-1",
     type: "consumption_shift",
-    title: "Sposta i consumi nelle ore solari",
-    message: "Spostando lavatrice e lavastoviglie tra le 10:00 e le 15:00 potresti risparmiare circa €3,20 al mese grazie all'autoconsumo condiviso.",
-    potentialSavingsEuro: 3.20,
+    title: "Sposta i consumi nella finestra solare",
+    message: "Concentrando lavatrice, pompa di calore o EV tra le 10:00 e le 15:00 puoi aumentare l'autoconsumo condiviso della CER.",
+    potentialSavingsEuro: 3.2,
     icon: "☀️",
   });
 
-  // Savings tip
   nudges.push({
     id: "nudge-savings-1",
     type: "savings_tip",
-    title: "Programma la ricarica EV",
-    message: "Ricaricando l'auto elettrica tra le 12:00 e le 14:00 nei giorni feriali sfrutti il picco di produzione solare della CER.",
-    potentialSavingsEuro: 5.50,
+    title: "Programma la ricarica EV nei picchi fotovoltaici",
+    message: "Le giornate con irraggiamento più stabile riducono il costo medio dei kWh condivisi e migliorano il punteggio community.",
+    potentialSavingsEuro: 5.5,
     icon: "🔌",
   });
 
-  // Active challenge reminder
   const activeChallenges = await prisma.challenge.findMany({
-    where: { status: "active" },
+    where: { cerId, status: "active" },
     include: { participants: { where: { memberId } } },
   });
   for (const challenge of activeChallenges) {
@@ -173,7 +180,7 @@ export async function generateNudges(memberId: string): Promise<SmartNudge[]> {
         id: `nudge-challenge-${challenge.id}`,
         type: "challenge_reminder",
         title: `Sfida in corso: ${challenge.title}`,
-        message: `Progressi: ${challenge.participants[0].currentValue}/${challenge.targetValue} ${challenge.unit}. Continua così!`,
+        message: `Sei a ${challenge.participants[0].currentValue}/${challenge.targetValue} ${challenge.unit}. Continua così per entrare nella top leaderboard.`,
         icon: "🎯",
       });
     }
@@ -182,15 +189,15 @@ export async function generateNudges(memberId: string): Promise<SmartNudge[]> {
   return nudges;
 }
 
-export async function getGamificationSummary(cerId = "cer-bertinoro") {
+export async function getGamificationSummary(cerId = DEFAULT_CER_ID) {
   const members = await prisma.member.findMany({ where: { cerId }, select: { id: true } });
-  const memberIds = members.map((m) => m.id);
-  
-  const totalAchievements = await prisma.memberAchievement.count({ where: { memberId: { in: memberIds } } });
-  const activeChallenges = await prisma.challenge.count({ where: { cerId, status: "active" } });
-  const totalParticipants = await prisma.challengeParticipant.count({
-    where: { challenge: { cerId } },
-  });
+  const memberIds = members.map((member) => member.id);
+
+  const [totalAchievements, activeChallenges, totalParticipants] = await Promise.all([
+    prisma.memberAchievement.count({ where: { memberId: { in: memberIds } } }),
+    prisma.challenge.count({ where: { cerId, status: "active" } }),
+    prisma.challengeParticipant.count({ where: { challenge: { cerId } } }),
+  ]);
 
   return {
     totalAchievementsEarned: totalAchievements,

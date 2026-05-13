@@ -1,13 +1,19 @@
 import { createApiKey, getApiKeys, revokeApiKey, getApiUsageStats, getOpenApiSpec } from "@/lib/api-platform";
+import { getCurrentSession, hasRequiredRole } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const view = searchParams.get("view"); // keys | stats | spec
+  const view = searchParams.get("view");
 
   if (view === "spec") {
     return Response.json(getOpenApiSpec());
+  }
+
+  const session = await getCurrentSession();
+  if (!hasRequiredRole(session, ["admin", "superadmin"])) {
+    return Response.json({ error: "Permessi insufficienti per consultare la piattaforma API." }, { status: session ? 403 : 401 });
   }
 
   if (view === "stats") {
@@ -15,18 +21,25 @@ export async function GET(request: Request) {
     return Response.json({ stats });
   }
 
-  const keys = await getApiKeys();
-  const stats = await getApiUsageStats();
+  const [keys, stats] = await Promise.all([getApiKeys(), getApiUsageStats()]);
   return Response.json({ keys, stats });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json() as {
+  const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Autenticazione richiesta per gestire API key." }, { status: 401 });
+  }
+  if (!hasRequiredRole(session, ["admin", "superadmin"])) {
+    return Response.json({ error: "Permessi insufficienti per gestire API key." }, { status: 403 });
+  }
+  const sessionUser = session.user;
+
+  const body = (await request.json()) as {
     action?: string;
     name?: string;
     scopes?: string[];
     rateLimit?: number;
-    createdBy?: string;
     keyId?: string;
   };
 
@@ -38,7 +51,7 @@ export async function POST(request: Request) {
       name: body.name,
       scopes: body.scopes,
       rateLimit: body.rateLimit,
-      createdBy: body.createdBy || "admin",
+      createdBy: sessionUser.email,
     });
     return Response.json(result, { status: 201 });
   }

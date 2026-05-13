@@ -1,3 +1,4 @@
+import { DashboardChartsSection } from "@/components/charts/dashboard-charts-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getEnergyData, getEnergySummary, getMembers, optimizationSuggestions } from "@/lib/data-db";
@@ -21,12 +22,18 @@ export default async function EnergyPage() {
     );
   }
 
+  const latestMonth = energyData[energyData.length - 1];
+  const bestSharedMonth = energyData.reduce((best, current) =>
+    current.sharedEnergyKwh > best.sharedEnergyKwh ? current : best,
+  );
+  const averageSharedEnergy = Math.round(energySummary.sharedEnergyKwh / Math.max(energyData.length, 1));
+
   return (
     <div className="space-y-8">
       <PageHeader
         eyebrow="Contabilizzazione energia"
         title="Bilancio energetico mensile della CER"
-        description="Produzione, consumo e quota condivisa per gli ultimi periodi, con dettaglio per singolo membro e suggerimenti di ottimizzazione."
+        description="Produzione, consumo e quota condivisa per gli ultimi periodi, con dettaglio per singolo membro, trend visuali e suggerimenti di ottimizzazione."
       />
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -43,6 +50,32 @@ export default async function EnergyPage() {
           <p className="mt-2 text-3xl font-bold text-zinc-950">{energySummary.sharedEnergyKwh.toLocaleString("it-IT")} kWh</p>
         </div>
       </div>
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <article className="rounded-3xl border border-lime-100 bg-white/90 p-6 shadow-sm shadow-lime-100/40">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">Trend più recente</p>
+          <h2 className="mt-3 text-xl font-bold text-zinc-950">{latestMonth.label}</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            {latestMonth.sharedEnergyKwh.toLocaleString("it-IT")} kWh condivisi con autoconsumo al {latestMonth.selfConsumptionPct}% e un beneficio di {formatCurrency(latestMonth.savingsEuro)}.
+          </p>
+        </article>
+        <article className="rounded-3xl border border-lime-100 bg-white/90 p-6 shadow-sm shadow-lime-100/40">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-lime-700">Picco di condivisione</p>
+          <h2 className="mt-3 text-xl font-bold text-zinc-950">{bestSharedMonth.label}</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-600">
+            È stato il mese con la miglior resa collettiva: {bestSharedMonth.sharedEnergyKwh.toLocaleString("it-IT")} kWh condivisi e {formatCurrency(bestSharedMonth.gseIncentiveEuro)} di incentivo GSE.
+          </p>
+        </article>
+        <article className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-100 to-lime-100 p-6 shadow-lg shadow-amber-100/40">
+          <p className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-700">Indicazione operativa</p>
+          <h2 className="mt-3 text-xl font-bold text-zinc-950">Media condivisa {averageSharedEnergy.toLocaleString("it-IT")} kWh / mese</h2>
+          <p className="mt-2 text-sm leading-6 text-zinc-700">
+            Usa i grafici per identificare i mesi sotto media e coordinare pompe di calore, EV e accumuli nella fascia 10:00–15:00.
+          </p>
+        </article>
+      </div>
+
+      <DashboardChartsSection energyData={energyData} latestMonth={latestMonth} />
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <section className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">
@@ -87,11 +120,22 @@ export default async function EnergyPage() {
             </ul>
           </div>
 
-          <div className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-100 to-lime-100 p-8 shadow-lg shadow-amber-100/40">
-            <h2 className="text-2xl font-bold text-zinc-950">Segnale operativo</h2>
-            <p className="mt-4 text-sm leading-6 text-zinc-700">
-              Le utenze con profilo negativo concentrano il prelievo nelle ore serali. Priorità: programmare pompe di calore, ricarica EV e cicli freddo nella fascia 10:00–15:00.
-            </p>
+          <div className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">
+            <h2 className="text-2xl font-bold text-zinc-950">Lettura rapida del periodo</h2>
+            <dl className="mt-5 space-y-4 text-sm text-zinc-600">
+              <div className="flex items-start justify-between gap-4 rounded-2xl bg-lime-50/70 px-4 py-3">
+                <dt className="font-semibold text-zinc-700">Risparmio complessivo</dt>
+                <dd className="font-bold text-zinc-950">{formatCurrency(energySummary.savingsEuro)}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4 rounded-2xl bg-amber-50/70 px-4 py-3">
+                <dt className="font-semibold text-zinc-700">Membri analizzati</dt>
+                <dd className="font-bold text-zinc-950">{members.length}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-4 rounded-2xl bg-white px-4 py-3 ring-1 ring-lime-100">
+                <dt className="font-semibold text-zinc-700">Mese con miglior resa</dt>
+                <dd className="font-bold text-zinc-950">{bestSharedMonth.label}</dd>
+              </div>
+            </dl>
           </div>
         </section>
       </div>
@@ -113,7 +157,7 @@ export default async function EnergyPage() {
               {members.map((member) => {
                 const quota = Math.round(
                   (energySummary.sharedEnergyKwh / Math.max(members.length, 1)) *
-                    (member.type === "produttore" ? 1.28 : member.type === "prosumer" ? 1.08 : 0.82)
+                    (member.type === "produttore" ? 1.28 : member.type === "prosumer" ? 1.08 : 0.82),
                 );
                 return (
                   <tr key={member.id}>

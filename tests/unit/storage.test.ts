@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatFileSize, canAccessCategory } from "@/lib/storage";
+import { canAccessCategory, formatFileSize, isStorageConfigured, summarizeStorageRows } from "@/lib/storage";
 
 describe("storage", () => {
   describe("formatFileSize", () => {
@@ -17,6 +17,30 @@ describe("storage", () => {
 
     it("formats gigabytes", () => {
       expect(formatFileSize(2.5 * 1024 * 1024 * 1024)).toBe("2.50 GB");
+    });
+  });
+
+  describe("storage configuration", () => {
+    it("detects a fully configured storage environment", () => {
+      expect(isStorageConfigured({
+        S3_ENDPOINT: "https://example-s3.local",
+        S3_ACCESS_KEY: "key",
+        S3_SECRET_KEY: "secret",
+        S3_BUCKET: "bucket",
+        S3_REGION: "eu-south-1",
+      })).toBe(true);
+    });
+
+    it("returns false when a required value is missing", () => {
+      expect(isStorageConfigured({ S3_ENDPOINT: "https://example-s3.local" })).toBe(false);
+    });
+
+    it("summarises storage rows without repeated aggregate queries", () => {
+      expect(summarizeStorageRows([
+        { category: "atti", sizeBytes: 1200 },
+        { category: "atti", sizeBytes: 800 },
+        { category: "report", sizeBytes: 5000 },
+      ]).find((folder) => folder.category === "atti")).toMatchObject({ fileCount: 2, totalSizeBytes: 2000 });
     });
   });
 

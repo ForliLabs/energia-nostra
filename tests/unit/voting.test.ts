@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { VoteRecord, VoteResults } from "@/lib/voting";
+import { deriveQuorumPct, normaliseVoteOptions, type VoteRecord, type VoteResults } from "@/lib/voting";
 
 // Test pure logic and types from voting module
 describe("voting", () => {
@@ -30,6 +30,18 @@ describe("voting", () => {
         const vote: Partial<VoteRecord> = { status: status as VoteRecord["status"] };
         expect(validStatuses).toContain(vote.status);
       }
+    });
+  });
+
+  describe("vote helpers", () => {
+    it("derives quorum percentages from textual rules", () => {
+      expect(deriveQuorumPct("Maggioranza semplice")).toBe(51);
+      expect(deriveQuorumPct("2/3 dei soci")).toBe(67);
+      expect(deriveQuorumPct("75% dei membri")).toBe(75);
+    });
+
+    it("normalises and deduplicates vote options", () => {
+      expect(normaliseVoteOptions([" Favorevole ", "Contrario", "Favorevole", ""])).toEqual(["Favorevole", "Contrario"]);
     });
   });
 

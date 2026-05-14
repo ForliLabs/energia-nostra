@@ -6,6 +6,7 @@ import type { AchievementInfo, ChallengeInfo, LeaderboardEntry, SmartNudge } fro
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
+import { getMutationHeaders } from "@/hooks/mutation-headers";
 
 interface GamificationResponse {
   summary: {
@@ -76,7 +77,7 @@ export default function GamificationPage() {
     try {
       const response = await fetch("/api/gamification", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({ action: "join-challenge", challengeId }),
       });
       const payload = (await response.json()) as { error?: string };

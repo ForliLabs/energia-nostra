@@ -6,6 +6,7 @@ import type { TradeOffer, TradeRecord, TradingStats } from "@/lib/trading";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
+import { getMutationHeaders } from "@/hooks/mutation-headers";
 
 interface TradingMember {
   id: string;
@@ -107,7 +108,7 @@ export default function TradingPage() {
     try {
       const response = await fetch("/api/trading", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({
           action: "create-offer",
           kwh: Number(form.kwh),
@@ -133,7 +134,7 @@ export default function TradingPage() {
     try {
       const response = await fetch("/api/trading", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({ action: "accept-offer", offerId }),
       });
       const payload = (await response.json()) as { error?: string };

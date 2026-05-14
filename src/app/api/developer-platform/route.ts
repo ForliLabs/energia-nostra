@@ -10,6 +10,7 @@ import {
   revokeAuthorization,
   uninstallPlugin,
 } from "@/lib/developer-platform";
+import { enforceMutationSecurity, isTrustedExternalUrl } from "@/lib/security";
 import { getCurrentSession, hasRequiredRole, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -60,6 +61,13 @@ export async function POST(request: Request) {
   };
 
   if (body.action === "exchange-token" && body.code && body.clientId) {
+    const tokenGuard = enforceMutationSecurity(request, {
+      rateLimitCategory: "auth",
+      rateLimitKey: `developer-token:${body.clientId}`,
+    });
+    if (!tokenGuard.ok) {
+      return tokenGuard.response;
+    }
     try {
       const tokens = await exchangeCodeForToken(body.code, body.clientId);
       return Response.json(tokens);
@@ -74,10 +82,26 @@ export async function POST(request: Request) {
     return Response.json({ error: "Accedi per gestire app e plugin." }, { status: 401 });
   }
   const sessionUser = session.user;
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `developer-platform:${sessionUser.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
+  }
 
   if (body.action === "register-app") {
     if (!body.name || !body.redirectUris?.length || !body.scopes?.length) {
       return Response.json({ error: "Campi obbligatori mancanti" }, { status: 400 });
+    }
+    if (!body.redirectUris.every((uri) => isTrustedExternalUrl(uri))) {
+      return Response.json({ error: "Usa redirect URI HTTPS validi oppure localhost in sviluppo." }, { status: 400 });
+    }
+    if (body.websiteUrl && !isTrustedExternalUrl(body.websiteUrl)) {
+      return Response.json({ error: "Il sito dell'app deve usare HTTPS valido." }, { status: 400 });
+    }
+    if (body.privacyUrl && !isTrustedExternalUrl(body.privacyUrl)) {
+      return Response.json({ error: "L'URL privacy deve usare HTTPS valido." }, { status: 400 });
     }
     try {
       const result = await registerOAuthApp({

@@ -1,4 +1,5 @@
 import { createWebhook, getWebhookDeliveries, getWebhooks, WEBHOOK_EVENTS } from "@/lib/api-platform";
+import { enforceMutationSecurity, isTrustedExternalUrl } from "@/lib/security";
 import { getCurrentSession, hasRequiredRole } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -30,11 +31,24 @@ export async function POST(request: Request) {
     return Response.json({ error: "Permessi insufficienti per gestire i webhook." }, { status: 403 });
   }
   const sessionUser = session.user;
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `webhooks:${sessionUser.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
+  }
 
   const body = (await request.json()) as { url?: string; events?: string[] };
 
   if (!body.url || !body.events?.length) {
     return Response.json({ error: "URL e eventi richiesti." }, { status: 400 });
+  }
+  if (!isTrustedExternalUrl(body.url)) {
+    return Response.json({ error: "Usa un endpoint HTTPS valido oppure localhost in sviluppo." }, { status: 400 });
+  }
+  if (!body.events.every((eventName) => (WEBHOOK_EVENTS as readonly string[]).includes(eventName))) {
+    return Response.json({ error: "Uno o più eventi webhook non sono supportati." }, { status: 400 });
   }
 
   try {

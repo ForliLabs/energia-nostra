@@ -138,7 +138,7 @@ export function DashboardShell({ brand, sections, children }: DashboardLayoutPro
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [highlightedIndex, paletteOpen, paletteResults]);
+  }, [closePalette, highlightedIndex, navigateToItem, paletteOpen, paletteResults]);
 
   const navigation = (
     <>

@@ -10,6 +10,7 @@ import {
   getTradingStats,
 } from "@/lib/trading";
 import { resolveMemberForSessionUser } from "@/lib/member-context";
+import { enforceMutationSecurity } from "@/lib/security";
 import { getCurrentSession, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,14 @@ export async function POST(request: Request) {
     return Response.json({ error: "Accedi per operare sul mercato P2P." }, { status: 401 });
   }
 
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `trading:${session.user.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
+  }
+
   const body = (await request.json()) as {
     action?: string;
     cerId?: string;
@@ -92,6 +101,9 @@ export async function POST(request: Request) {
   if (body.action === "create-offer") {
     if (!body.kwh || !body.pricePerKwh) {
       return Response.json({ error: "Quantità e prezzo sono obbligatori per creare un'offerta." }, { status: 400 });
+    }
+    if (body.kwh <= 0 || body.pricePerKwh <= 0) {
+      return Response.json({ error: "Quantità e prezzo devono essere maggiori di zero." }, { status: 400 });
     }
     try {
       const offer = await createOffer({

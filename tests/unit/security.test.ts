@@ -9,6 +9,8 @@ import {
   getCorsHeaders,
   getClientIp,
   getRateLimitConfig,
+  enforceMutationSecurity,
+  isTrustedExternalUrl,
 } from "@/lib/security";
 
 describe("security", () => {
@@ -111,6 +113,71 @@ describe("security", () => {
     it("defaults for unknown origins", () => {
       const headers = getCorsHeaders("http://unknown.com");
       expect(headers["Access-Control-Allow-Origin"]).toBeDefined();
+    });
+  });
+
+  describe("mutation guards", () => {
+    it("allows requests with matching csrf token", () => {
+      const request = new Request("http://localhost/api/test", {
+        method: "POST",
+        headers: { "x-csrf-token": "csrf-ok" },
+      });
+      expect(
+        enforceMutationSecurity(request, {
+          csrfToken: "csrf-ok",
+          rateLimitKey: `mutation-ok-${Date.now()}`,
+        }).ok,
+      ).toBe(true);
+    });
+
+    it("rejects requests with invalid csrf token", async () => {
+      const request = new Request("http://localhost/api/test", {
+        method: "POST",
+        headers: { "x-csrf-token": "csrf-bad" },
+      });
+      const result = enforceMutationSecurity(request, {
+        csrfToken: "csrf-ok",
+        rateLimitKey: `mutation-csrf-${Date.now()}`,
+      });
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.response.status).toBe(403);
+        await expect(result.response.json()).resolves.toMatchObject({ error: expect.stringContaining("CSRF") });
+      }
+    });
+
+    it("rate limits repeated mutations", async () => {
+      const rateLimitKey = `mutation-rate-${Date.now()}`;
+      const request = new Request("http://localhost/api/test", { method: "POST" });
+      expect(
+        enforceMutationSecurity(request, {
+          rateLimitKey,
+          rateLimitConfig: { windowMs: 60_000, maxRequests: 1 },
+        }).ok,
+      ).toBe(true);
+      const blocked = enforceMutationSecurity(request, {
+        rateLimitKey,
+        rateLimitConfig: { windowMs: 60_000, maxRequests: 1 },
+      });
+      expect(blocked.ok).toBe(false);
+      if (!blocked.ok) {
+        expect(blocked.response.status).toBe(429);
+      }
+    });
+  });
+
+  describe("trusted external urls", () => {
+    it("allows https endpoints", () => {
+      expect(isTrustedExternalUrl("https://partner.example.com/hook")).toBe(true);
+    });
+
+    it("allows localhost over http for local development", () => {
+      expect(isTrustedExternalUrl("http://localhost:3000/callback")).toBe(true);
+    });
+
+    it("rejects invalid or insecure remote urls", () => {
+      expect(isTrustedExternalUrl("http://example.com/callback")).toBe(false);
+      expect(isTrustedExternalUrl("not-a-url")).toBe(false);
     });
   });
 

@@ -1,4 +1,5 @@
 import { createApiKey, getApiKeys, revokeApiKey, getApiUsageStats, getOpenApiSpec } from "@/lib/api-platform";
+import { enforceMutationSecurity } from "@/lib/security";
 import { getCurrentSession, hasRequiredRole } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +35,13 @@ export async function POST(request: Request) {
     return Response.json({ error: "Permessi insufficienti per gestire API key." }, { status: 403 });
   }
   const sessionUser = session.user;
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `api-keys:${sessionUser.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
+  }
 
   const body = (await request.json()) as {
     action?: string;

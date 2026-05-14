@@ -1,4 +1,5 @@
 import { getCarbonDashboard, purchaseCredits, issueCredits, calculateCo2Avoidance, retireCredits } from "@/lib/carbon-credits";
+import { enforceMutationSecurity } from "@/lib/security";
 import { getCurrentSession, hasRequiredRole, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,14 @@ export async function POST(request: Request) {
   const session = await getCurrentSession();
   if (!session) {
     return Response.json({ error: "Accedi per gestire il portafoglio carbon credits." }, { status: 401 });
+  }
+
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `carbon-credits:${session.user.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const body = (await request.json()) as {
@@ -62,6 +71,9 @@ export async function POST(request: Request) {
   if (body.action === "purchase") {
     if (!body.creditId || !body.tonnes) {
       return Response.json({ error: "Credit ID e tonnellate richiesti." }, { status: 400 });
+    }
+    if (body.tonnes <= 0) {
+      return Response.json({ error: "Le tonnellate da acquistare devono essere positive." }, { status: 400 });
     }
     const tx = await purchaseCredits({
       creditId: body.creditId,

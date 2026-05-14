@@ -7,6 +7,7 @@ import {
   joinChallenge,
 } from "@/lib/gamification";
 import { resolveMemberForSessionUser } from "@/lib/member-context";
+import { enforceMutationSecurity } from "@/lib/security";
 import { getCurrentSession, resolveSessionCerId } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,14 @@ export async function POST(request: Request) {
   const session = await getCurrentSession();
   if (!session) {
     return Response.json({ error: "Accedi per partecipare alle sfide della community." }, { status: 401 });
+  }
+
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `gamification:${session.user.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
   }
 
   const body = (await request.json()) as { action?: string; challengeId?: string; cerId?: string };

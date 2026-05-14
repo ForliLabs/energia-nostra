@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
+import { getMutationHeaders } from "@/hooks/mutation-headers";
 
 interface TenantInfo {
   id: string;
@@ -124,7 +125,7 @@ export default function MultiTenantPage() {
     try {
       const response = await fetch("/api/multi-tenant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify(body),
       });
       const payload = (await response.json()) as { error?: string; token?: string };

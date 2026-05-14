@@ -6,6 +6,7 @@ import type { ApiKeyInfo, ApiUsageStats, WebhookInfo } from "@/lib/api-platform"
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
+import { getMutationHeaders } from "@/hooks/mutation-headers";
 
 interface ApiKeysResponse {
   keys: ApiKeyInfo[];
@@ -116,7 +117,7 @@ export default function ApiPlatformPage() {
     try {
       const response = await fetch("/api/api-keys", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({ action: "create", name: keyForm.name, scopes: keyForm.scopes, rateLimit: Number(keyForm.rateLimit) }),
       });
       const payload = (await response.json()) as { error?: string; rawKey?: string };
@@ -138,7 +139,7 @@ export default function ApiPlatformPage() {
     try {
       const response = await fetch("/api/api-keys", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({ action: "revoke", keyId }),
       });
       const payload = (await response.json()) as { error?: string };
@@ -159,7 +160,7 @@ export default function ApiPlatformPage() {
     try {
       const response = await fetch("/api/webhooks", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify({ url: webhookForm.url, events: webhookForm.events }),
       });
       const payload = (await response.json()) as { error?: string; id?: string };

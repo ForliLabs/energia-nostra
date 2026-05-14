@@ -6,6 +6,7 @@ import type { CarbonDashboard } from "@/lib/carbon-credits";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
+import { getMutationHeaders } from "@/hooks/mutation-headers";
 
 interface SessionUser {
   role?: string;
@@ -95,7 +96,7 @@ export default function CarbonCreditsPage() {
     try {
       const response = await fetch("/api/carbon-credits", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getMutationHeaders(),
         body: JSON.stringify(body),
       });
       const payload = (await response.json()) as { error?: string };

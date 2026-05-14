@@ -24,3 +24,12 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Upgraded dashboard navigation to surface shortcut guidance and quicker access on desktop and mobile.
 - Improved accessibility with aria-live feedback, dialog labels, and keyboard traversal for rapid actions.
+
+## [Iteration 3] - 2026-05-15
+### Added
+- Shared mutation security helpers for CSRF enforcement, rate limiting, and trusted external URL checks.
+- Browser-side mutation header helper plus new unit coverage for security guard behavior.
+
+### Changed
+- Hardened advanced dashboard mutation routes with per-user rate limits, CSRF verification for production sessions, and stricter request validation.
+- Updated dashboard write actions to include CSRF headers automatically when a production session is active.

@@ -10,6 +10,7 @@ import {
   suspendTenant,
   updateTenantTheme,
 } from "@/lib/multi-tenant";
+import { enforceMutationSecurity } from "@/lib/security";
 import { getCurrentSession, hasRequiredRole } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -46,11 +47,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getCurrentSession();
-  if (!session) {
-    return Response.json({ error: "Accedi per gestire la piattaforma multi-CER." }, { status: 401 });
-  }
-
   const body = (await request.json()) as {
     action?: string;
     name?: string;
@@ -69,6 +65,13 @@ export async function POST(request: Request) {
   };
 
   if (body.action === "accept-invitation" && body.token) {
+    const invitationGuard = enforceMutationSecurity(request, {
+      rateLimitCategory: "auth",
+      rateLimitKey: `tenant-invitation:${body.token}`,
+    });
+    if (!invitationGuard.ok) {
+      return invitationGuard.response;
+    }
     try {
       const result = await acceptInvitation(body.token);
       return Response.json(result);
@@ -76,6 +79,19 @@ export async function POST(request: Request) {
       const message = error instanceof Error ? error.message : "Token non valido";
       return Response.json({ error: message }, { status: 400 });
     }
+  }
+
+  const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Accedi per gestire la piattaforma multi-CER." }, { status: 401 });
+  }
+
+  const guard = enforceMutationSecurity(request, {
+    csrfToken: session.source === "production" ? session.csrfToken ?? null : null,
+    rateLimitKey: `multi-tenant:${session.user.id}`,
+  });
+  if (!guard.ok) {
+    return guard.response;
   }
 
   if (body.action === "provision") {

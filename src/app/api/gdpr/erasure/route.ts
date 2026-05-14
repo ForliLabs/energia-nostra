@@ -1,9 +1,9 @@
 import { eraseUserData } from "@/lib/gdpr";
-import { getSessionFromCookie } from "@/lib/auth";
+import { getCurrentSession } from "@/lib/session";
 import { schemas, validateBody, validationErrorResponse } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  const session = await getSessionFromCookie();
+  const session = await getCurrentSession();
   if (!session) {
     return Response.json({ error: "Autenticazione richiesta" }, { status: 401 });
   }

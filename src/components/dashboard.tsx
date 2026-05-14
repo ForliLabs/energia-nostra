@@ -310,6 +310,7 @@ export function StatCard({ label, value, change, trend }: StatCardProps) {
             trend === "neutral" && "text-zinc-500",
           )}
         >
+          {trend === "up" ? "↑ " : trend === "down" ? "↓ " : ""}
           {change}
         </p>
       )}

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
+import { OnboardingStepper } from "@/components/ui/onboarding-stepper";
 import {
   getAnnouncements,
   getCerProfile,
@@ -29,8 +30,14 @@ function resolveMemberForUser(user: CurrentSessionUser | null, members: Awaited<
   }) ?? null;
 }
 
-export default async function MemberPortalPage() {
+export default async function MemberPortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const session = await getCurrentSession();
+  const params = await searchParams;
+  const isWelcome = params.welcome === "1";
 
   if (!session) {
     return (
@@ -80,18 +87,41 @@ export default async function MemberPortalPage() {
             </p>
           </section>
 
-          <div className="grid gap-6 lg:grid-cols-3">
-            {[
-              ["1. Verifica dati anagrafici", "Controlla che nome completo ed email coincidano con la domanda di adesione o con il registro soci."],
-              ["2. Completa i documenti", "Carica eventuale contratto di adesione e firma i moduli richiesti nell'area documenti."],
-              ["3. Attendi conferma CER", "Quando il board associa il tuo profilo, il portale mostrerà automaticamente consumi, incentivi e fatture."],
-            ].map(([title, description]) => (
-              <article key={title} className="rounded-3xl border border-lime-100 bg-white/90 p-6 shadow-sm shadow-lime-100/40">
-                <h2 className="text-lg font-bold text-zinc-950">{title}</h2>
-                <p className="mt-3 text-sm leading-6 text-zinc-600">{description}</p>
-              </article>
-            ))}
-          </div>
+          {isWelcome ? (
+            <div role="status" className="rounded-3xl border border-lime-300 bg-lime-50 p-6 shadow-sm">
+              <p className="text-sm font-semibold text-lime-800">
+                🎉 Benvenuto in EnergiaNostra! Il tuo account è stato creato con successo.
+              </p>
+              <p className="mt-2 text-sm text-zinc-600">
+                Segui i passaggi qui sotto per completare il tuo profilo e accedere a tutti i servizi della comunità energetica.
+              </p>
+            </div>
+          ) : null}
+
+          <OnboardingStepper
+            steps={[
+              {
+                title: "Crea l'account",
+                description: "Il tuo account è attivo e registrato nel sistema.",
+                status: "completed",
+              },
+              {
+                title: "Verifica dati anagrafici",
+                description: "Controlla che nome completo ed email coincidano con la domanda di adesione o con il registro soci.",
+                status: "current",
+              },
+              {
+                title: "Completa i documenti",
+                description: "Carica il contratto di adesione e firma i moduli richiesti nell'area documenti.",
+                status: "upcoming",
+              },
+              {
+                title: "Attendi conferma CER",
+                description: "Quando il board associa il tuo profilo, il portale mostrerà automaticamente consumi, incentivi e fatture.",
+                status: "upcoming",
+              },
+            ]}
+          />
 
           <EmptyState
             title="Profilo membro non ancora associato"
@@ -137,6 +167,17 @@ export default async function MemberPortalPage() {
             Membro della CER &quot;{cerProfile.name}&quot; · {member.municipality} · {member.type}
           </p>
         </section>
+
+        {isWelcome ? (
+          <div role="status" className="rounded-3xl border border-lime-300 bg-lime-50 p-6 shadow-sm">
+            <p className="text-sm font-semibold text-lime-800">
+              🎉 Benvenuto in EnergiaNostra! Il tuo account è stato creato e associato correttamente.
+            </p>
+            <p className="mt-2 text-sm text-zinc-600">
+              Esplora il tuo riepilogo energetico, controlla i documenti da firmare e partecipa alle prossime votazioni della comunità.
+            </p>
+          </div>
+        ) : null}
 
         <section className="grid gap-4 lg:grid-cols-3">
           {[
@@ -246,13 +287,14 @@ export default async function MemberPortalPage() {
               />
             ) : (
               <table className="min-w-full divide-y divide-lime-100 text-sm">
+                <caption className="sr-only">Storico dei dati energetici condivisi della comunità</caption>
                 <thead>
                   <tr className="text-left text-zinc-500">
-                    <th className="pb-3 pr-4 font-semibold">Mese</th>
-                    <th className="pb-3 pr-4 font-semibold">Produzione CER</th>
-                    <th className="pb-3 pr-4 font-semibold">Consumo CER</th>
-                    <th className="pb-3 pr-4 font-semibold">Energia condivisa</th>
-                    <th className="pb-3 font-semibold">Risparmio</th>
+                    <th scope="col" className="pb-3 pr-4 font-semibold">Mese</th>
+                    <th scope="col" className="pb-3 pr-4 font-semibold">Produzione CER</th>
+                    <th scope="col" className="pb-3 pr-4 font-semibold">Consumo CER</th>
+                    <th scope="col" className="pb-3 pr-4 font-semibold">Energia condivisa</th>
+                    <th scope="col" className="pb-3 font-semibold">Risparmio</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-lime-50">
@@ -296,10 +338,26 @@ export default async function MemberPortalPage() {
         <section className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-100 to-lime-100 p-8 shadow-lg shadow-amber-100/40">
           <h2 className="text-2xl font-bold text-zinc-950">Azioni rapide</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            <Link href="/dashboard/voting" className="rounded-2xl border border-lime-200 bg-white p-4 text-center text-sm font-semibold text-zinc-700 transition hover:bg-lime-50">🗳️ Votazioni</Link>
-            <Link href="/dashboard/energy" className="rounded-2xl border border-lime-200 bg-white p-4 text-center text-sm font-semibold text-zinc-700 transition hover:bg-lime-50">⚡ Energia</Link>
-            <Link href="/dashboard/billing" className="rounded-2xl border border-lime-200 bg-white p-4 text-center text-sm font-semibold text-zinc-700 transition hover:bg-lime-50">💰 Fatturazione</Link>
-            <Link href="/dashboard/documents" className="rounded-2xl border border-lime-200 bg-white p-4 text-center text-sm font-semibold text-zinc-700 transition hover:bg-lime-50">📋 Documenti</Link>
+            <Link href="/dashboard/voting" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              <span className="text-2xl" role="img" aria-hidden="true">🗳️</span>
+              <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Votazioni</span>
+              <span className="mt-1 block text-xs text-zinc-500">Partecipa alle decisioni</span>
+            </Link>
+            <Link href="/dashboard/energy" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              <span className="text-2xl" role="img" aria-hidden="true">⚡</span>
+              <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Energia</span>
+              <span className="mt-1 block text-xs text-zinc-500">Monitora i consumi</span>
+            </Link>
+            <Link href="/dashboard/billing" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              <span className="text-2xl" role="img" aria-hidden="true">💰</span>
+              <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Fatturazione</span>
+              <span className="mt-1 block text-xs text-zinc-500">Consulta le fatture</span>
+            </Link>
+            <Link href="/dashboard/documents" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              <span className="text-2xl" role="img" aria-hidden="true">📋</span>
+              <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Documenti</span>
+              <span className="mt-1 block text-xs text-zinc-500">Firma e scarica</span>
+            </Link>
           </div>
         </section>
       </main>

@@ -13,8 +13,11 @@ export async function GET(request: Request) {
   }
 
   const session = await getCurrentSession();
+  if (!session) {
+    return Response.json({ error: "Autenticazione richiesta per consultare la piattaforma API." }, { status: 401 });
+  }
   if (!hasRequiredRole(session, ["admin", "superadmin"])) {
-    return Response.json({ error: "Permessi insufficienti per consultare la piattaforma API." }, { status: session ? 403 : 401 });
+    return Response.json({ error: "Permessi insufficienti per consultare la piattaforma API." }, { status: 403 });
   }
 
   if (view === "stats") {

@@ -292,7 +292,7 @@ export default function AssessmentPage() {
               />
             )}
 
-            {pvgisError ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{pvgisError}</p> : null}
+            {pvgisError ? <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{pvgisError}</p> : null}
 
             {pvgisData && (
               <div className="rounded-3xl border border-lime-200 bg-white/90 p-8 shadow-xl shadow-lime-100/40">

@@ -39,6 +39,12 @@ export function Footer({ brand, tagline }: FooterProps) {
               <Link href="/cookie-policy" className="text-sm text-lime-100/80 transition hover:text-white">
                 Cookie
               </Link>
+              <a
+                href="mailto:supporto@energianostra.it"
+                className="text-sm text-lime-100/80 transition hover:text-white"
+              >
+                Assistenza
+              </a>
             </div>
           </div>
         </div>

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { PasswordInput } from "@/components/ui/password-input";
 import { useToast } from "@/components/ui/toast-provider";
 import { IS_DEMO_MODE } from "@/lib/app-config";
 
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -28,6 +30,7 @@ export default function LoginPage() {
     if (!email.includes("@")) {
       setError("Inserisci un indirizzo email valido.");
       showToast({ title: "Email non valida", description: "Controlla il formato dell'indirizzo email.", variant: "error" });
+      emailRef.current?.focus();
       return;
     }
 
@@ -81,6 +84,7 @@ export default function LoginPage() {
               <label className="grid gap-2">
                 <span className="text-sm font-semibold text-zinc-700">Email</span>
                 <input
+                  ref={emailRef}
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -90,20 +94,16 @@ export default function LoginPage() {
                   required
                 />
               </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-semibold text-zinc-700">Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="rounded-2xl border border-lime-200 bg-amber-50/60 px-4 py-3 outline-none transition focus:border-lime-500"
-                  placeholder="••••••••"
-                  autoComplete="current-password"
-                  required
-                />
-              </label>
+              <PasswordInput
+                label="Password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
 
-              {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+              {error ? <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
 
               <button
                 type="submit"

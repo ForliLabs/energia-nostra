@@ -1,8 +1,8 @@
 import { exportUserData } from "@/lib/gdpr";
-import { getSessionFromCookie } from "@/lib/auth";
+import { getCurrentSession, hasRequiredRole } from "@/lib/session";
 
 export async function GET(request: Request) {
-  const session = await getSessionFromCookie();
+  const session = await getCurrentSession();
   if (!session) {
     return Response.json({ error: "Autenticazione richiesta" }, { status: 401 });
   }
@@ -12,7 +12,7 @@ export async function GET(request: Request) {
   const userId = url.searchParams.get("userId") || session.user.id;
 
   // Users can only export their own data, unless admin
-  if (userId !== session.user.id && session.user.role !== "admin" && session.user.role !== "superadmin") {
+  if (userId !== session.user.id && !hasRequiredRole(session, ["admin", "superadmin"])) {
     return Response.json({ error: "Non autorizzato" }, { status: 403 });
   }
 

@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Footer } from "@/components/footer";
 import { Navbar } from "@/components/navbar";
+import { PasswordInput } from "@/components/ui/password-input";
+import { PasswordStrength } from "@/components/ui/password-strength";
 import { useToast } from "@/components/ui/toast-provider";
 
 const navItems = [
@@ -35,6 +37,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -44,12 +48,14 @@ export default function RegisterPage() {
       const message = "Inserisci almeno nome e cognome per associare correttamente il tuo profilo.";
       setError(message);
       showToast({ title: "Profilo incompleto", description: message, variant: "error" });
+      nameRef.current?.focus();
       return;
     }
 
     if (!email.includes("@")) {
       setError("Inserisci un indirizzo email valido.");
       showToast({ title: "Email non valida", description: "Controlla il formato dell'indirizzo email.", variant: "error" });
+      emailRef.current?.focus();
       return;
     }
 
@@ -107,6 +113,7 @@ export default function RegisterPage() {
               <label className="grid gap-2">
                 <span className="text-sm font-semibold text-zinc-700">Nome completo</span>
                 <input
+                  ref={nameRef}
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   className="rounded-2xl border border-lime-200 bg-amber-50/60 px-4 py-3 outline-none transition focus:border-lime-500"
@@ -118,6 +125,7 @@ export default function RegisterPage() {
               <label className="grid gap-2">
                 <span className="text-sm font-semibold text-zinc-700">Email</span>
                 <input
+                  ref={emailRef}
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
@@ -127,21 +135,21 @@ export default function RegisterPage() {
                   required
                 />
               </label>
-              <label className="grid gap-2">
-                <span className="text-sm font-semibold text-zinc-700">Password</span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  className="rounded-2xl border border-lime-200 bg-amber-50/60 px-4 py-3 outline-none transition focus:border-lime-500"
-                  placeholder="Almeno 8 caratteri, numero e simbolo"
-                  minLength={8}
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
+              <PasswordInput
+                label="Password"
+                id="register-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Almeno 8 caratteri, numero e simbolo"
+                hint="Usa maiuscole, minuscole, numeri e un simbolo."
+                minLength={8}
+                autoComplete="new-password"
+                required
+                aria-describedby="register-password-strength"
+              />
+              <PasswordStrength id="register-password-strength" password={password} />
 
-              {error ? <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
+              {error ? <p role="alert" className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p> : null}
 
               <button
                 type="submit"

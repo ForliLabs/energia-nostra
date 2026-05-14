@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -18,6 +18,21 @@ interface NavbarProps {
 
 export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
   const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
 
   return (
     <nav className="sticky top-0 z-50 border-b border-amber-100 bg-white/90 backdrop-blur-md">
@@ -47,6 +62,7 @@ export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
         </div>
 
         <button
+          ref={triggerRef}
           className="rounded-md p-1 text-lime-950 md:hidden"
           onClick={() => setOpen(!open)}
           aria-controls="mobile-navigation"
@@ -64,7 +80,7 @@ export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
         </button>
       </div>
 
-      <div id="mobile-navigation" className={cn("border-t border-amber-100 md:hidden", open ? "block" : "hidden")}>
+      <div id="mobile-navigation" ref={menuRef} className={cn("border-t border-amber-100 md:hidden", open ? "block" : "hidden")}>
         <div className="space-y-1 px-4 py-3">
           {items.map((item) => (
             <Link

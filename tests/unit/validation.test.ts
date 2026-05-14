@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   schemas,
-  validateBody,
   validationErrorResponse,
   string,
   number,

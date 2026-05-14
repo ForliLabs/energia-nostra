@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, MessageCircle, Trophy, UserPlus, Award, Leaf } from "lucide-react";
+import { Heart, MessageCircle, UserPlus, Award, Leaf } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface CommunityDashboard {

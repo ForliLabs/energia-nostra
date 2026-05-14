@@ -41,3 +41,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Deferred sidebar and palette filtering work to improve typing responsiveness on larger navigation trees.
 - Reduced dashboard shell bundle weight by moving modal UI out of the always-loaded navigation component.
+
+## [Iteration 5] - 2026-05-15
+### Changed
+- Polished the codebase by removing outstanding lint warnings in dashboard views, libs, and unit tests.
+- Added an explicit `typecheck` script and tightened the CI workflow with manual dispatch support and Playwright browser caching.
+
+### Fixed
+- Cleared remaining unused imports and variables that obscured signal in routine validation runs.

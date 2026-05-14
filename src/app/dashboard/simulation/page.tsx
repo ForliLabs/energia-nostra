@@ -1,6 +1,6 @@
 "use client";
 
-import { Calculator, TrendingUp, Leaf, Users, BarChart3 } from "lucide-react";
+import { Calculator, TrendingUp, Leaf, BarChart3 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface SimulationListItem {

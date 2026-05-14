@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, FileText, CheckCircle, AlertTriangle, ArrowUpDown, Receipt } from "lucide-react";
+import { Banknote, FileText, AlertTriangle, ArrowUpDown, Receipt } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface FinancialDashboard {

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, Clock, AlertTriangle, FileCheck, BarChart3, Upload } from "lucide-react";
+import { CheckCircle, Clock, AlertTriangle, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface GsePortalDashboard {

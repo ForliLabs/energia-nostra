@@ -12,7 +12,6 @@ import {
   getAlertRules,
   getSlaTargets,
   getRecentTraces,
-  getActiveSpans,
 } from "@/lib/observability-v2";
 
 describe("observability-v2", () => {

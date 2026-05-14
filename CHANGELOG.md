@@ -33,3 +33,11 @@ All notable changes to this project will be documented in this file.
 ### Changed
 - Hardened advanced dashboard mutation routes with per-user rate limits, CSRF verification for production sessions, and stricter request validation.
 - Updated dashboard write actions to include CSRF headers automatically when a production session is active.
+
+## [Iteration 4] - 2026-05-15
+### Added
+- Lazily loaded command palette component to keep the dashboard shell lighter until power-user navigation is needed.
+
+### Changed
+- Deferred sidebar and palette filtering work to improve typing responsiveness on larger navigation trees.
+- Reduced dashboard shell bundle weight by moving modal UI out of the always-loaded navigation component.

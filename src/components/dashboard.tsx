@@ -1,11 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flattenSidebarItems, filterSidebarSections, type SidebarItem, type SidebarSection } from "@/components/dashboard-navigation";
 import { cn } from "@/lib/utils";
+
+const DashboardCommandPalette = dynamic(
+  () => import("@/components/dashboard-command-palette").then((module) => module.DashboardCommandPalette),
+  { ssr: false },
+);
 
 export type { SidebarItem, SidebarSection } from "@/components/dashboard-navigation";
 
@@ -46,22 +52,19 @@ export function DashboardShell({ brand, sections, children }: DashboardLayoutPro
   const paletteInputRef = useRef<HTMLInputElement>(null);
   const paletteListId = useId();
 
-  const commandLabel = useMemo(() => {
-    if (typeof window === "undefined") {
-      return "Ctrl K";
-    }
-    return /Mac|iPhone|iPad/.test(window.navigator.platform) ? "⌘K" : "Ctrl K";
-  }, []);
+  const commandLabel = "⌘K / Ctrl K";
+  const deferredSearch = useDeferredValue(search);
+  const deferredPaletteQuery = useDeferredValue(paletteQuery);
 
-  const filteredSections = useMemo(() => filterSidebarSections(sections, search), [search, sections]);
-  const commandItems = useMemo(() => flattenSidebarItems(sections), [sections]);
+  const filteredSections = useMemo(() => filterSidebarSections(sections, deferredSearch), [deferredSearch, sections]);
+  const commandItems = useMemo(() => (paletteOpen ? flattenSidebarItems(sections) : []), [paletteOpen, sections]);
   const paletteResults = useMemo(() => {
-    const query = paletteQuery.trim().toLowerCase();
+    const query = deferredPaletteQuery.trim().toLowerCase();
     const filtered = query
       ? commandItems.filter((item) => item.searchText.includes(query))
       : commandItems;
     return filtered.slice(0, 12);
-  }, [commandItems, paletteQuery]);
+  }, [commandItems, deferredPaletteQuery]);
 
   const closePalette = useCallback(() => {
     setPaletteOpen(false);
@@ -260,82 +263,21 @@ export function DashboardShell({ brand, sections, children }: DashboardLayoutPro
           ) : null}
 
           {paletteOpen ? (
-            <div className="fixed inset-0 z-[60] flex items-start justify-center bg-zinc-950/45 px-4 py-12" role="dialog" aria-modal="true" aria-labelledby="dashboard-command-palette-title">
-              <div className="w-full max-w-2xl rounded-[2rem] border border-lime-100 bg-white shadow-2xl shadow-zinc-900/20">
-                <div className="flex items-start justify-between gap-4 border-b border-lime-100 px-6 py-5">
-                  <div>
-                    <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Accesso rapido</p>
-                    <h2 id="dashboard-command-palette-title" className="mt-2 text-2xl font-black text-zinc-950">Command palette dashboard</h2>
-                    <p className="mt-1 text-sm text-zinc-500">Cerca pagine, flussi avanzati e strumenti operativi. Usa ↑ ↓ per navigare e Invio per aprire.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={closePalette}
-                    className="rounded-2xl border border-lime-200 bg-white p-2 text-zinc-700"
-                    aria-label="Chiudi command palette"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
-                <div className="border-b border-lime-100 px-6 py-4">
-                  <label htmlFor="dashboard-command-palette-input" className="sr-only">Cerca pagina dashboard</label>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-lime-700" />
-                    <input
-                      id="dashboard-command-palette-input"
-                      ref={paletteInputRef}
-                      type="search"
-                      value={paletteQuery}
-                      onChange={(event) => {
-                        setPaletteQuery(event.target.value);
-                        setHighlightedIndex(0);
-                      }}
-                      placeholder="Es. trading, fatture, smart grid, import"
-                      aria-controls={paletteListId}
-                      aria-activedescendant={paletteResults[highlightedIndex] ? `palette-option-${paletteResults[highlightedIndex]?.href.replace(/[^a-z0-9-]/gi, "-")}` : undefined}
-                      className="w-full rounded-2xl border border-lime-200 bg-lime-50/60 py-3 pl-12 pr-4 text-sm outline-none transition focus:border-lime-500 focus:ring-2 focus:ring-lime-100"
-                    />
-                  </div>
-                  <p className="mt-3 text-xs text-zinc-500" aria-live="polite">
-                    {paletteResults.length > 0
-                      ? `${paletteResults.length} risultati disponibili. Shortcut: ${commandLabel}.`
-                      : `Nessun risultato disponibile per “${paletteQuery}”.`}
-                  </p>
-                </div>
-                <ul id={paletteListId} role="listbox" className="max-h-[28rem] overflow-y-auto px-3 py-3">
-                  {paletteResults.length > 0 ? (
-                    paletteResults.map((item, index) => {
-                      const optionId = `palette-option-${item.href.replace(/[^a-z0-9-]/gi, "-")}`;
-                      const isActive = index === highlightedIndex;
-                      return (
-                        <li key={item.href} id={optionId} role="option" aria-selected={isActive}>
-                          <button
-                            type="button"
-                            onMouseEnter={() => setHighlightedIndex(index)}
-                            onClick={() => navigateToItem(item.href)}
-                            className={cn(
-                              "flex w-full items-start justify-between gap-4 rounded-2xl px-4 py-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-500",
-                              isActive ? "bg-lime-100 text-lime-950" : "text-zinc-700 hover:bg-amber-50",
-                            )}
-                          >
-                            <div>
-                              <p className="text-sm font-semibold">{item.label}</p>
-                              <p className="mt-1 text-xs text-zinc-500">{item.section} · {item.href}</p>
-                              {item.description ? <p className="mt-2 text-sm text-zinc-600">{item.description}</p> : null}
-                            </div>
-                            <span className="rounded-xl border border-lime-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-500">Invio</span>
-                          </button>
-                        </li>
-                      );
-                    })
-                  ) : (
-                    <li className="px-4 py-6 text-sm text-zinc-500">
-                      Nessuna scorciatoia trovata. Prova con termini come “compliance”, “pagamenti” o “forecasting”.
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </div>
+            <DashboardCommandPalette
+              commandLabel={commandLabel}
+              highlightedIndex={highlightedIndex}
+              listId={paletteListId}
+              onClose={closePalette}
+              onHighlightChange={setHighlightedIndex}
+              onNavigate={navigateToItem}
+              onQueryChange={(value) => {
+                setPaletteQuery(value);
+                setHighlightedIndex(0);
+              }}
+              paletteInputRef={paletteInputRef}
+              query={paletteQuery}
+              results={paletteResults}
+            />
           ) : null}
 
           <main id="main-content" className="min-h-screen px-4 py-8 sm:px-6 lg:px-10">

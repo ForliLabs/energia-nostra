@@ -7,7 +7,7 @@ interface FooterProps {
 
 export function Footer({ brand, tagline }: FooterProps) {
   return (
-    <footer className="mt-auto border-t border-lime-100 bg-lime-950 text-lime-50">
+    <footer aria-label="Informazioni e link utili" className="mt-auto border-t border-lime-100 bg-lime-950 text-lime-50">
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="md:flex md:items-start md:justify-between">
           <div>

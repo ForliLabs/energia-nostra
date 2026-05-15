@@ -20,7 +20,7 @@ export default function DevelopersPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar brand="EnergiaNostra" items={navItems} ctaLabel="API Docs" ctaHref="/developers/docs" />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <section className="bg-gradient-to-b from-zinc-950 to-zinc-900 py-20 text-white">
           <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
             <h1 className="text-4xl font-black tracking-tight sm:text-5xl">

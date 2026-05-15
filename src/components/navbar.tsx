@@ -35,7 +35,7 @@ export function Navbar({ brand, items, ctaLabel, ctaHref }: NavbarProps) {
   }, [open]);
 
   return (
-    <nav className="sticky top-0 z-50 border-b border-amber-100 bg-white/90 backdrop-blur-md">
+    <nav aria-label="Navigazione principale" className="sticky top-0 z-50 border-b border-amber-100 bg-white/90 backdrop-blur-md">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
         <Link href="/" className="text-xl font-black tracking-tight text-lime-950">
           {brand}

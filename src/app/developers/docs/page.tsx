@@ -22,7 +22,7 @@ export default function ApiDocsPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar brand="EnergiaNostra" items={navItems} ctaLabel="OpenAPI JSON" ctaHref="/api/openapi" />
 
-      <main className="flex-1 py-16">
+      <main id="main-content" className="flex-1 py-16">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h1 className="text-3xl font-black tracking-tight text-zinc-950">API Reference</h1>

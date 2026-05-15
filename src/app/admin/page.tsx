@@ -74,7 +74,7 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <main id="main-content" className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
         <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Super admin</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">

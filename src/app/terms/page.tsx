@@ -16,7 +16,7 @@ export default function TermsPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar brand="EnergiaNostra" items={navItems} ctaLabel="Dashboard" ctaHref="/dashboard" />
-      <main className="flex-1 py-16">
+      <main id="main-content" className="flex-1 py-16">
         <div className="prose prose-zinc mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
           <h1>Termini e Condizioni</h1>
           <p className="text-sm text-zinc-500">Ultimo aggiornamento: luglio 2025</p>

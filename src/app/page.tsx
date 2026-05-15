@@ -72,7 +72,7 @@ export default async function Home() {
         ctaHref="/assessment"
       />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <Hero
           title="L'energia della tua comunità, gestita insieme"
           subtitle="Crea e gestisci la tua Comunità Energetica Rinnovabile — dalla fondazione alla bolletta"
@@ -99,7 +99,7 @@ export default async function Home() {
           </div>
         </Hero>
 
-        <section className="py-16">
+        <section aria-label="Dati energia Romagna" className="py-16">
           <div className="mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[1.5fr_1fr] lg:px-8">
             <div className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-xl shadow-amber-100/40">
               <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.18em] text-lime-700">
@@ -166,7 +166,7 @@ export default async function Home() {
           </FeatureGrid>
         </div>
 
-        <section className="pb-20">
+        <section aria-label="Invito all'azione per assessment CER" className="pb-20">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="rounded-3xl border border-amber-200 bg-gradient-to-r from-amber-100 via-yellow-50 to-lime-100 p-8 shadow-lg shadow-amber-100/40 sm:p-10">
               <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">

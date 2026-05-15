@@ -23,7 +23,7 @@ export default function PricingPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar brand="EnergiaNostra" items={navItems} ctaLabel="Prova gratuita" ctaHref="/registrazione" />
 
-      <main className="flex-1">
+      <main id="main-content" className="flex-1">
         <section className="bg-gradient-to-b from-amber-50 to-white py-16 sm:py-24">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-2xl text-center">

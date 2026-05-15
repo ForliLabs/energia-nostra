@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getMemberBenefitStatement, type CerMember, cerMembers, type MemberType } from "@/lib/data";
 import { DataFreshness } from "@/components/ui/data-freshness";
 import { FetchError } from "@/components/ui/fetch-error";
+import { PageHeader } from "@/components/ui/page-header";
+import { useToast } from "@/components/ui/toast-provider";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("it-IT", {
@@ -29,9 +31,8 @@ function isApiError(value: unknown): value is { error: string } {
   );
 }
 
-type FeedbackState = { message: string; variant: "success" | "error" } | null;
-
 export default function MembersPage() {
+  const { showToast } = useToast();
   const [members, setMembers] = useState<CerMember[]>(cerMembers);
   const [form, setForm] = useState<FormState>({
     name: "",
@@ -40,7 +41,6 @@ export default function MembersPage() {
     energyBalanceKwh: "120",
   });
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -98,7 +98,6 @@ export default function MembersPage() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
-    setFeedback(null);
 
     try {
       const response = await fetch("/api/members", {
@@ -117,24 +116,29 @@ export default function MembersPage() {
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        setFeedback({
-          message: isApiError(payload) ? payload.error : "Impossibile aggiungere il membro.",
+        showToast({
+          title: "Impossibile aggiungere il membro",
+          description: isApiError(payload) ? payload.error : "Errore sconosciuto.",
           variant: "error",
         });
         return;
       }
 
       if (isApiError(payload)) {
-        setFeedback({ message: payload.error, variant: "error" });
+        showToast({ title: "Impossibile aggiungere il membro", description: payload.error, variant: "error" });
         return;
       }
 
       const createdMember = payload as CerMember;
       setMembers((current) => [createdMember, ...current]);
       setForm({ name: "", type: "prosumer", podCode: "", energyBalanceKwh: "120" });
-      setFeedback({ message: "Membro aggiunto correttamente alla CER.", variant: "success" });
+      showToast({ title: "Membro aggiunto", description: "Membro aggiunto correttamente alla CER.", variant: "success" });
     } catch {
-      setFeedback({ message: "Errore di rete: impossibile contattare l'API membri. Controlla la connessione e riprova.", variant: "error" });
+      showToast({
+        title: "Errore di rete",
+        description: "Impossibile contattare l'API membri. Controlla la connessione e riprova.",
+        variant: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -142,23 +146,17 @@ export default function MembersPage() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Gestione membri</p>
-            <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-              Anagrafiche, ruoli e benefici della CER
-            </h1>
-            <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-              Monitora pod, saldi energetici e prospetti economici mensili di produttori, consumatori e prosumer.
-            </p>
-          </div>
+      <PageHeader
+        eyebrow="Gestione membri"
+        title="Anagrafiche, ruoli e benefici della CER"
+        description="Monitora pod, saldi energetici e prospetti economici mensili di produttori, consumatori e prosumer."
+        actions={
           <DataFreshness
             lastUpdated={lastUpdated}
             onRefresh={() => void loadMembers()}
           />
-        </div>
-      </section>
+        }
+      />
 
       {fetchError ? (
         <FetchError
@@ -244,20 +242,6 @@ export default function MembersPage() {
               {loading ? "Salvataggio..." : "Aggiungi membro"}
             </button>
           </form>
-
-          {feedback && (
-            <div
-              role={feedback.variant === "error" ? "alert" : "status"}
-              className={`mt-4 rounded-2xl px-4 py-3 text-sm ${
-                feedback.variant === "success"
-                  ? "border border-lime-200 bg-lime-50 text-lime-800"
-                  : "border border-red-200 bg-red-50 text-red-800"
-              }`}
-            >
-              {feedback.variant === "success" ? "✓ " : "✗ "}
-              {feedback.message}
-            </div>
-          )}
         </section>
 
         <section className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">

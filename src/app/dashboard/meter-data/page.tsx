@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import type { ValidationResult } from "@/lib/meter-pipeline";
+import { PageHeader } from "@/components/ui/page-header";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -94,15 +95,11 @@ IT001E990000013;2025-04-01;0;1520`;
 
   return (
     <div className="space-y-8">
-      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Pipeline dati contatore</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-          Caricamento misure smart meter
-        </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-          Carica file CSV con le letture dei contatori intelligenti. Il sistema valida i POD, rileva anomalie e prepara i dati per la contabilizzazione GSE.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Pipeline dati contatore"
+        title="Caricamento misure smart meter"
+        description="Carica file CSV con le letture dei contatori intelligenti. Il sistema valida i POD, rileva anomalie e prepara i dati per la contabilizzazione GSE."
+      />
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">

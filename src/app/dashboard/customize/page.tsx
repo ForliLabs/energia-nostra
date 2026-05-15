@@ -40,6 +40,7 @@ export default function CustomizePage() {
   const [currentTourStep, setCurrentTourStep] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -51,6 +52,7 @@ export default function CustomizePage() {
         fetch("/api/dashboard-config?view=tour").then(r => { if (!r.ok) throw new Error(`Errore ${r.status}`); return r.json(); }),
       ]);
       setWidgets(layoutData.widgets || []);
+      setIsDirty(false);
       setTourCompleted(layoutData.tourCompleted || false);
       setAvailableWidgets(widgetsData.widgets || []);
       setTour(tourData.tour || []);
@@ -94,19 +96,25 @@ export default function CustomizePage() {
 
   /** Swap a widget up or down in the position order. */
   const moveWidget = (widgetId: string, direction: "up" | "down") => {
+    let reordered = false;
+
     setWidgets(prev => {
       const sorted = [...prev].sort((a, b) => a.position - b.position);
       const idx = sorted.findIndex(w => w.id === widgetId);
       if (direction === "up" && idx <= 0) return prev;
       if (direction === "down" && idx >= sorted.length - 1) return prev;
       const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      const newSorted = sorted.map((w, i) => {
+      reordered = true;
+      return sorted.map((w, i) => {
         if (i === idx) return { ...w, position: sorted[swapIdx].position };
         if (i === swapIdx) return { ...w, position: sorted[idx].position };
         return w;
       });
-      return newSorted;
     });
+
+    if (reordered) {
+      setIsDirty(true);
+    }
   };
 
   const handleReset = async () => {
@@ -120,6 +128,7 @@ export default function CustomizePage() {
       if (!r.ok) throw new Error(`Errore ${r.status}`);
       const data = await fetch("/api/dashboard-config").then(res => res.json()) as { widgets?: WidgetConfig[] };
       setWidgets(data.widgets || []);
+      setIsDirty(false);
       showToast({ title: "Layout ripristinato", description: "Le impostazioni predefinite sono state ricaricate.", variant: "success" });
     } catch (e) {
       showToast({ title: "Ripristino non riuscito", description: (e as Error).message, variant: "error" });
@@ -137,6 +146,7 @@ export default function CustomizePage() {
         body: JSON.stringify({ action: "save", widgets }),
       });
       if (!r.ok) throw new Error(`Errore ${r.status}`);
+      setIsDirty(false);
       showToast({ title: "Layout salvato", description: "Le modifiche al layout sono state salvate.", variant: "success" });
     } catch (e) {
       showToast({ title: "Salvataggio non riuscito", description: (e as Error).message, variant: "error" });
@@ -238,10 +248,10 @@ export default function CustomizePage() {
             <button
               onClick={() => void handleSave()}
               disabled={saving}
-              className="flex items-center gap-2 rounded-xl bg-lime-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-lime-700 disabled:opacity-50"
+              className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50 ${isDirty ? "bg-amber-500 hover:bg-amber-600" : "bg-lime-600 hover:bg-lime-700"}`}
             >
               {saving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <LayoutDashboard className="h-4 w-4" />}
-              Salva Layout
+              {isDirty ? "Salva Layout · non salvato" : "Salva Layout"}
             </button>
           </>
         }

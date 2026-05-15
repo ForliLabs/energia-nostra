@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { VoteRecord, VoteResults } from "@/lib/voting";
+import { DataFreshness } from "@/components/ui/data-freshness";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
 import { useToast } from "@/components/ui/toast-provider";
 
@@ -47,19 +49,26 @@ export default function VotingPage() {
   const { showToast } = useToast();
   const [votes, setVotes] = useState<VoteWithResults[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedVote, setSelectedVote] = useState<string | null>(null);
   const [castingVote, setCastingVote] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [currentUser, setCurrentUser] = useState<SessionUser>(null);
   const [newVote, setNewVote] = useState(createDefaultVoteForm);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const loadVotes = useCallback(async () => {
+    setLoadError(null);
     try {
       const [votesResponse, sessionResponse] = await Promise.all([fetch("/api/votes"), fetch("/api/auth/session")]);
+      if (!votesResponse.ok) {
+        throw new Error(`Errore ${votesResponse.status}: impossibile caricare le votazioni.`);
+      }
       const votesData = (await votesResponse.json()) as VoteWithResults[];
       setVotes(votesData);
       setSelectedVote((current) => current || votesData[0]?.id || null);
+      setLastUpdated(new Date().toISOString());
 
       if (sessionResponse.ok) {
         const sessionData = (await sessionResponse.json()) as { user?: SessionUser };
@@ -67,14 +76,39 @@ export default function VotingPage() {
       } else {
         setCurrentUser(null);
       }
+    } catch (caughtError) {
+      setLoadError((caughtError as Error).message);
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void loadVotes();
-  }, [loadVotes]);
+    let active = true;
+    (async () => {
+      setLoadError(null);
+      try {
+        const [votesResponse, sessionResponse] = await Promise.all([fetch("/api/votes"), fetch("/api/auth/session")]);
+        if (!votesResponse.ok) throw new Error(`Errore ${votesResponse.status}: impossibile caricare le votazioni.`);
+        const votesData = (await votesResponse.json()) as VoteWithResults[];
+        if (!active) return;
+        setVotes(votesData);
+        setSelectedVote((current) => current || votesData[0]?.id || null);
+        setLastUpdated(new Date().toISOString());
+        if (sessionResponse.ok) {
+          const sessionData = (await sessionResponse.json()) as { user?: SessionUser };
+          setCurrentUser(sessionData.user || null);
+        } else {
+          setCurrentUser(null);
+        }
+      } catch (caughtError) {
+        if (active) setLoadError((caughtError as Error).message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   const handleCastVote = async (voteId: string, choice: string) => {
     setCastingVote(true);
@@ -144,12 +178,19 @@ export default function VotingPage() {
         title="Votazioni e assemblee CER"
         description="Dalla preparazione dell'ordine del giorno alla raccolta del quorum: ora la piattaforma usa la sessione reale del membro e rende più chiari tempi, esito e prossimi passi."
         actions={
-          <button
-            onClick={() => setShowCreateForm((current) => !current)}
-            className="rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700"
-          >
-            {showCreateForm ? "Chiudi" : "+ Nuova votazione"}
-          </button>
+          <div className="flex items-center gap-4">
+            <DataFreshness
+              lastUpdated={lastUpdated}
+              onRefresh={() => { setLoading(true); void loadVotes(); }}
+              refreshing={loading}
+            />
+            <button
+              onClick={() => setShowCreateForm((current) => !current)}
+              className="rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700"
+            >
+              {showCreateForm ? "Chiudi" : "+ Nuova votazione"}
+            </button>
+          </div>
         }
       />
 
@@ -203,7 +244,16 @@ export default function VotingPage() {
 
       {loading ? <p className="text-sm text-zinc-500">Caricamento votazioni...</p> : null}
 
-      {votes.length === 0 && !loading ? (
+      {loadError ? (
+        <FetchError
+          title="Impossibile caricare le votazioni"
+          description="Verifica la connessione e riprova. Le votazioni della CER saranno disponibili appena il servizio risponde."
+          errorDetail={loadError}
+          onRetry={() => { setLoading(true); void loadVotes(); }}
+        />
+      ) : null}
+
+      {votes.length === 0 && !loading && !loadError ? (
         <EmptyState
           title="Nessuna votazione disponibile"
           description="Quando il board aprirà il prossimo ordine del giorno, troverai qui agenda, quorum e pulsanti di voto."

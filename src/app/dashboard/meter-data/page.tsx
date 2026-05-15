@@ -33,7 +33,7 @@ export default function MeterDataPage() {
       setResult(data as ValidationResult);
     } catch {
       setState("error");
-      setErrorMsg("Errore di rete.");
+      setErrorMsg("Impossibile raggiungere il server. Controlla la connessione di rete e riprova. Se il problema persiste, contatta l'amministratore CER.");
     }
   }, []);
 
@@ -45,7 +45,7 @@ export default function MeterDataPage() {
       if (file && (file.name.endsWith(".csv") || file.type === "text/csv")) {
         uploadCsv(file);
       } else {
-        setErrorMsg("Per favore carica un file CSV.");
+        setErrorMsg("Formato file non supportato. Carica un file con estensione .csv contenente le letture dei contatori.");
       }
     },
     [uploadCsv]
@@ -88,7 +88,7 @@ IT001E990000013;2025-04-01;0;1520`;
       setResult(data);
     } catch {
       setState("error");
-      setErrorMsg("Errore di rete.");
+      setErrorMsg("Impossibile raggiungere il server per l'upload demo. Controlla la connessione e riprova.");
     }
   }, []);
 
@@ -147,7 +147,19 @@ IT001E990000013;2025-04-01;0;1520`;
           </button>
 
           {errorMsg && (
-            <p className="mt-4 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{errorMsg}</p>
+            <div role="alert" className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              <p className="font-semibold">Caricamento non riuscito</p>
+              <p className="mt-1">{errorMsg}</p>
+              {state === "error" && (
+                <button
+                  type="button"
+                  onClick={() => { setState("idle"); setErrorMsg(null); }}
+                  className="mt-2 text-sm font-semibold text-red-800 underline hover:text-red-950"
+                >
+                  Riprova con un nuovo file
+                </button>
+              )}
+            </div>
           )}
         </section>
 

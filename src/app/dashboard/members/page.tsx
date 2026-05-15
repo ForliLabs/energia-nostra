@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getMemberBenefitStatement, type CerMember, cerMembers, type MemberType } from "@/lib/data";
+import { DataFreshness } from "@/components/ui/data-freshness";
+import { FetchError } from "@/components/ui/fetch-error";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("it-IT", {
@@ -27,6 +29,8 @@ function isApiError(value: unknown): value is { error: string } {
   );
 }
 
+type FeedbackState = { message: string; variant: "success" | "error" } | null;
+
 export default function MembersPage() {
   const [members, setMembers] = useState<CerMember[]>(cerMembers);
   const [form, setForm] = useState<FormState>({
@@ -36,20 +40,45 @@ export default function MembersPage() {
     energyBalanceKwh: "120",
   });
   const [loading, setLoading] = useState(false);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
+  const loadMembers = useCallback(async () => {
+    setFetchError(null);
+    try {
+      const response = await fetch("/api/members");
+      if (!response.ok) {
+        throw new Error(`Errore ${response.status}: impossibile caricare l'anagrafica.`);
+      }
+      const data: CerMember[] = await response.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setMembers(data);
+      }
+      setLastUpdated(new Date().toISOString());
+    } catch (caughtError) {
+      setFetchError((caughtError as Error).message);
+    }
+  }, []);
 
   useEffect(() => {
     let active = true;
 
     fetch("/api/members")
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) throw new Error(`Errore ${response.status}`);
+        return response.json();
+      })
       .then((data: CerMember[]) => {
         if (active && Array.isArray(data) && data.length > 0) {
           setMembers(data);
+          setLastUpdated(new Date().toISOString());
         }
       })
-      .catch(() => {
-        // Manteniamo il seed locale come fallback.
+      .catch((err) => {
+        if (active) {
+          setFetchError((err as Error).message);
+        }
       });
 
     return () => {
@@ -88,21 +117,24 @@ export default function MembersPage() {
       const payload: unknown = await response.json();
 
       if (!response.ok) {
-        setFeedback(isApiError(payload) ? payload.error : "Impossibile aggiungere il membro.");
+        setFeedback({
+          message: isApiError(payload) ? payload.error : "Impossibile aggiungere il membro.",
+          variant: "error",
+        });
         return;
       }
 
       if (isApiError(payload)) {
-        setFeedback(payload.error);
+        setFeedback({ message: payload.error, variant: "error" });
         return;
       }
 
       const createdMember = payload as CerMember;
       setMembers((current) => [createdMember, ...current]);
       setForm({ name: "", type: "prosumer", podCode: "", energyBalanceKwh: "120" });
-      setFeedback("Membro aggiunto correttamente alla CER.");
+      setFeedback({ message: "Membro aggiunto correttamente alla CER.", variant: "success" });
     } catch {
-      setFeedback("Errore di rete: impossibile contattare l'API membri.");
+      setFeedback({ message: "Errore di rete: impossibile contattare l'API membri. Controlla la connessione e riprova.", variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -111,14 +143,31 @@ export default function MembersPage() {
   return (
     <div className="space-y-8">
       <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
-        <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Gestione membri</p>
-        <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
-          Anagrafiche, ruoli e benefici della CER
-        </h1>
-        <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
-          Monitora pod, saldi energetici e prospetti economici mensili di produttori, consumatori e prosumer.
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-lime-700">Gestione membri</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 sm:text-4xl">
+              Anagrafiche, ruoli e benefici della CER
+            </h1>
+            <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600">
+              Monitora pod, saldi energetici e prospetti economici mensili di produttori, consumatori e prosumer.
+            </p>
+          </div>
+          <DataFreshness
+            lastUpdated={lastUpdated}
+            onRefresh={() => void loadMembers()}
+          />
+        </div>
       </section>
+
+      {fetchError ? (
+        <FetchError
+          title="Impossibile caricare l'anagrafica membri"
+          description="I dati visualizzati potrebbero non essere aggiornati. Riprova per ottenere l'elenco dal database."
+          errorDetail={fetchError}
+          onRetry={() => void loadMembers()}
+        />
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
@@ -197,7 +246,17 @@ export default function MembersPage() {
           </form>
 
           {feedback && (
-            <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-zinc-700">{feedback}</p>
+            <div
+              role={feedback.variant === "error" ? "alert" : "status"}
+              className={`mt-4 rounded-2xl px-4 py-3 text-sm ${
+                feedback.variant === "success"
+                  ? "border border-lime-200 bg-lime-50 text-lime-800"
+                  : "border border-red-200 bg-red-50 text-red-800"
+              }`}
+            >
+              {feedback.variant === "success" ? "✓ " : "✗ "}
+              {feedback.message}
+            </div>
           )}
         </section>
 

@@ -1,43 +1,49 @@
 import { getMembers, createMember, memberExistsByPod, type MemberType } from "@/lib/data-db";
+import { createApiHandler, ApiError } from "@/lib/api-handler";
+import { schemas } from "@/lib/validation";
 
 export const dynamic = "force-dynamic";
 
-const validTypes: MemberType[] = ["produttore", "consumatore", "prosumer"];
+// Map user-facing (English) role values from the validation schema to the
+// Italian member-type values stored in the database.
+const roleToMemberType: Record<string, MemberType> = {
+  prosumer: "prosumer",
+  consumer: "consumatore",
+  producer: "produttore",
+};
 
-export async function GET() {
-  const members = await getMembers();
-  return Response.json(members);
-}
+export const GET = createApiHandler({
+  auth: { required: true, roles: ["admin", "member", "auditor", "superadmin"] },
+  handler: async () => {
+    const members = await getMembers();
+    return { data: members };
+  },
+});
 
-export async function POST(request: Request) {
-  const payload = (await request.json()) as {
-    name?: string;
-    type?: MemberType;
-    podCode?: string;
-    energyBalanceKwh?: number;
-  };
+export const POST = createApiHandler({
+  auth: { required: true, roles: ["admin", "superadmin"] },
+  schema: schemas.memberCreate,
+  handler: async ({ body }) => {
+    const payload = body as { name: string; pod: string; role?: string; fiscalCode: string; email: string };
+    const name = payload.name;
+    const podCode = payload.pod;
 
-  if (!payload.name?.trim() || !payload.podCode?.trim() || typeof payload.energyBalanceKwh !== "number") {
-    return Response.json(
-      { error: "Compila nome, POD e saldo energetico del nuovo membro." },
-      { status: 400 }
-    );
-  }
+    // Convert validated English role to Italian MemberType; default to "prosumer".
+    const type: MemberType = payload.role
+      ? roleToMemberType[payload.role] ?? "prosumer"
+      : "prosumer";
 
-  if (!payload.type || !validTypes.includes(payload.type)) {
-    return Response.json({ error: "Tipologia membro non valida." }, { status: 400 });
-  }
+    if (await memberExistsByPod(podCode)) {
+      throw new ApiError(409, "Esiste già un membro con questo POD.");
+    }
 
-  if (await memberExistsByPod(payload.podCode)) {
-    return Response.json({ error: "Esiste già un membro con questo POD." }, { status: 409 });
-  }
+    const member = await createMember({
+      name,
+      type,
+      podCode,
+      energyBalanceKwh: 0,
+    });
 
-  const member = await createMember({
-    name: payload.name,
-    type: payload.type,
-    podCode: payload.podCode,
-    energyBalanceKwh: payload.energyBalanceKwh,
-  });
-
-  return Response.json(member, { status: 201 });
-}
+    return { data: member, status: 201 };
+  },
+});

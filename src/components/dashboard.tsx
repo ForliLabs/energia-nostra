@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, Search, X } from "lucide-react";
 import { type ReactNode, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flattenSidebarItems, filterSidebarSections, type SidebarItem, type SidebarSection } from "@/components/dashboard-navigation";
+import { ConnectionStatusBanner } from "@/components/ui/connection-status-banner";
 import { cn } from "@/lib/utils";
 
 const DashboardCommandPalette = dynamic(
@@ -280,6 +281,7 @@ export function DashboardShell({ brand, sections, children }: DashboardLayoutPro
             />
           ) : null}
 
+          <ConnectionStatusBanner />
           <main id="main-content" className="min-h-screen px-4 py-8 sm:px-6 lg:px-10">
             <div className="mx-auto max-w-7xl">{children}</div>
           </main>

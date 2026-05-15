@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { BillingStats, InvoiceRecord } from "@/lib/billing";
+import { DataFreshness } from "@/components/ui/data-freshness";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatsSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast-provider";
 
 const formatCurrency = (value: number) =>
@@ -30,6 +33,7 @@ export default function BillingPage() {
   const [filter, setFilter] = useState<"all" | "emessa" | "pagata" | "scaduta">("all");
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -43,6 +47,7 @@ export default function BillingPage() {
       setInvoices(data.invoices || []);
       setStats(data.stats || null);
       setSelectedInvoiceId((current) => current || data.invoices?.[0]?.id || null);
+      setLastUpdated(new Date().toISOString());
     } catch (caughtError) {
       setError((caughtError as Error).message);
     } finally {
@@ -117,14 +122,22 @@ export default function BillingPage() {
         eyebrow="Fatturazione e pagamenti"
         title="Gestione finanziaria della CER"
         description="Monitora lo stato delle fatture, registra gli incassi e prepara il membro al canale di pagamento più adatto senza uscire dal dettaglio economico."
+        actions={
+          <DataFreshness
+            lastUpdated={lastUpdated}
+            onRefresh={() => void loadData()}
+            refreshing={loading}
+          />
+        }
       />
 
-      {loading && !stats ? <p className="text-sm text-zinc-500">Caricamento dati finanziari...</p> : null}
+      {loading && !stats ? <StatsSkeleton count={4} /> : null}
       {error && !stats ? (
-        <EmptyState
+        <FetchError
           title="Impossibile caricare la fatturazione"
-          description={error}
-          action={<button onClick={() => void loadData()} className="rounded-2xl bg-lime-600 px-4 py-2 text-sm font-semibold text-white">Riprova</button>}
+          description="Non siamo riusciti a recuperare i dati finanziari. Controlla la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => void loadData()}
         />
       ) : null}
 

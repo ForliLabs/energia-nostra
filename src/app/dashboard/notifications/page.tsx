@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Bell, Check, CheckCheck, Mail, Smartphone, Settings, RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Bell, Check, CheckCheck, Mail, Smartphone, Settings } from "lucide-react";
+import { DataFreshness } from "@/components/ui/data-freshness";
+import { FetchError } from "@/components/ui/fetch-error";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Notification {
   id: string;
@@ -29,56 +32,149 @@ const categoryLabels: Record<string, string> = {
   gamification: "Sfide & Badge",
 };
 
+function NotificationsSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <Skeleton className="h-7 w-48" />
+          <Skeleton className="mt-2 h-4 w-36" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-28 rounded-xl" />
+          <Skeleton className="h-10 w-28 rounded-xl" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-lime-100 bg-white divide-y divide-zinc-50">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-4 px-6 py-4">
+            <Skeleton className="mt-1 h-2 w-2 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-56" />
+              <Skeleton className="h-3 w-72" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [preferences, setPreferences] = useState<PreferenceCategory[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [view, setView] = useState<"notifications" | "preferences">("notifications");
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    setError(null);
     try {
       const [notifData, countData, prefsData] = await Promise.all([
-        fetch("/api/notifications").then(r => r.json()),
-        fetch("/api/notifications?view=unread-count").then(r => r.json()),
-        fetch("/api/notifications?view=preferences").then(r => r.json()),
+        fetch("/api/notifications").then(r => {
+          if (!r.ok) throw new Error(`Errore ${r.status}`);
+          return r.json();
+        }),
+        fetch("/api/notifications?view=unread-count").then(r => {
+          if (!r.ok) throw new Error(`Errore ${r.status}`);
+          return r.json();
+        }),
+        fetch("/api/notifications?view=preferences").then(r => {
+          if (!r.ok) throw new Error(`Errore ${r.status}`);
+          return r.json();
+        }),
       ]);
       setNotifications(notifData.notifications || []);
       setUnreadCount(countData.count || 0);
       setPreferences(prefsData.preferences?.categories || []);
+      setLastUpdated(new Date().toISOString());
+    } catch (caughtError) {
+      setError((caughtError as Error).message || "Impossibile caricare le notifiche.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    void fetchData();
+    let active = true;
+    (async () => {
+      setError(null);
+      try {
+        const [notifData, countData, prefsData] = await Promise.all([
+          fetch("/api/notifications").then(r => {
+            if (!r.ok) throw new Error(`Errore ${r.status}`);
+            return r.json();
+          }),
+          fetch("/api/notifications?view=unread-count").then(r => {
+            if (!r.ok) throw new Error(`Errore ${r.status}`);
+            return r.json();
+          }),
+          fetch("/api/notifications?view=preferences").then(r => {
+            if (!r.ok) throw new Error(`Errore ${r.status}`);
+            return r.json();
+          }),
+        ]);
+        if (!active) return;
+        setNotifications(notifData.notifications || []);
+        setUnreadCount(countData.count || 0);
+        setPreferences(prefsData.preferences?.categories || []);
+        setLastUpdated(new Date().toISOString());
+      } catch (caughtError) {
+        if (active) setError((caughtError as Error).message || "Impossibile caricare le notifiche.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   const markRead = async (id: string) => {
-    await fetch("/api/notifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark-read", notificationId: id }),
-    });
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    setUnreadCount(prev => Math.max(0, prev - 1));
+    try {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark-read", notificationId: id }),
+      });
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch {
+      // Silently fail for single-mark — user can retry
+    }
   };
 
   const markAllRead = async () => {
-    await fetch("/api/notifications", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "mark-all-read" }),
-    });
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    setUnreadCount(0);
+    try {
+      await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mark-all-read" }),
+      });
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setUnreadCount(0);
+    } catch {
+      // Silently fail — user can retry
+    }
   };
 
   if (loading) {
+    return <NotificationsSkeleton />;
+  }
+
+  if (error) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw className="h-8 w-8 animate-spin text-lime-600" />
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-lime-950">Centro Notifiche</h1>
+        </div>
+        <FetchError
+          title="Impossibile caricare le notifiche"
+          description="Verifica la connessione e riprova. Se il problema persiste, potrebbe esserci un intervento di manutenzione in corso."
+          errorDetail={error}
+          onRetry={() => { setLoading(true); void fetchData(); }}
+        />
       </div>
     );
   }
@@ -88,9 +184,16 @@ export default function NotificationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-lime-950">Centro Notifiche</h1>
-          <p className="text-zinc-500 mt-1">
-            {unreadCount > 0 ? `${unreadCount} notifiche non lette` : "Nessuna notifica non letta"}
-          </p>
+          <div className="flex items-center gap-4 mt-1">
+            <p className="text-zinc-500">
+              {unreadCount > 0 ? `${unreadCount} notifiche non lette` : "Nessuna notifica non letta"}
+            </p>
+            <DataFreshness
+              lastUpdated={lastUpdated}
+              onRefresh={() => { setLoading(true); void fetchData(); }}
+              refreshing={loading}
+            />
+          </div>
         </div>
         <div className="flex gap-2">
           <button
@@ -123,7 +226,8 @@ export default function NotificationsPage() {
             {notifications.length === 0 ? (
               <div className="px-6 py-12 text-center text-zinc-400">
                 <Bell className="h-12 w-12 mx-auto mb-3 text-zinc-300" />
-                <p>Nessuna notifica. Le notifiche appariranno qui quando ci saranno eventi nella tua CER.</p>
+                <p className="font-medium text-zinc-500">Nessuna notifica</p>
+                <p className="mt-1 text-sm">Le notifiche appariranno qui quando ci saranno eventi nella tua CER, come nuove votazioni, fatture o aggiornamenti energetici.</p>
               </div>
             ) : (
               notifications.map((n) => (
@@ -143,6 +247,7 @@ export default function NotificationsPage() {
                     <button
                       onClick={() => markRead(n.id)}
                       className="flex-shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600"
+                      aria-label={`Segna "${n.title}" come letta`}
                     >
                       <Check className="h-4 w-4" />
                     </button>

@@ -258,7 +258,7 @@ describe("health route", () => {
   it("returns 503 when database is unhealthy", async () => {
     mockGetCurrentSession.mockResolvedValue(null);
     const { checkDatabaseHealth } = await import("@/lib/data-db");
-    vi.mocked(checkDatabaseHealth).mockResolvedValueOnce({ connected: false, latencyMs: 0 } as ReturnType<Awaited<typeof checkDatabaseHealth>>);
+    vi.mocked(checkDatabaseHealth).mockResolvedValueOnce({ connected: false, tables: 0, error: "db unavailable" });
     const { GET } = await import("@/app/api/health/route");
     const res = await GET(new Request("http://localhost/api/health"));
     expect(res.status).toBe(503);

@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, ArrowRight, RotateCcw, RefreshCw } from "lucide-react";
+import { FetchError } from "@/components/ui/fetch-error";
+import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface ImportJob {
   id: string;
@@ -29,6 +33,7 @@ const importTypeLabels: Record<string, string> = {
 };
 
 export default function ImportPage() {
+  const { showToast } = useToast();
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [onboarding, setOnboarding] = useState<{ steps: OnboardingStep[]; completionPct: number } | null>(null);
   const [selectedType, setSelectedType] = useState<string>("members");
@@ -36,17 +41,28 @@ export default function ImportPage() {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportJob | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    Promise.all([
-      fetch("/api/import").then(r => r.json()),
-      fetch("/api/onboarding").then(r => r.json()),
-    ]).then(([jobsData, onboardingData]) => {
+  const fetchData = useCallback(async () => {
+    setError(null);
+    try {
+      const [jobsData, onboardingData] = await Promise.all([
+        fetch("/api/import").then(r => { if (!r.ok) throw new Error(`Errore ${r.status}`); return r.json(); }),
+        fetch("/api/onboarding").then(r => { if (!r.ok) throw new Error(`Errore ${r.status}`); return r.json(); }),
+      ]);
       setJobs(jobsData.jobs || []);
       setOnboarding(onboardingData);
+    } catch (e) {
+      setError((e as Error).message || "Impossibile caricare i dati.");
+    } finally {
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => { void fetchData(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchData]);
 
   const handleImport = async (dryRun: boolean) => {
     if (!csvContent.trim()) return;
@@ -60,7 +76,10 @@ export default function ImportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "parse", csvContent }),
       });
-      const parseData = await parseRes.json();
+      const parseData = await parseRes.json() as { headers?: string[]; error?: string };
+      if (!parseRes.ok) {
+        throw new Error(parseData.error || `Errore nel parsing del CSV (${parseRes.status}).`);
+      }
 
       // Step 2: Auto-detect columns
       const detectRes = await fetch("/api/import", {
@@ -68,7 +87,10 @@ export default function ImportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "auto-detect", headers: parseData.headers, type: selectedType }),
       });
-      const detectData = await detectRes.json();
+      const detectData = await detectRes.json() as { mappings?: unknown; error?: string };
+      if (!detectRes.ok) {
+        throw new Error(detectData.error || `Errore nel riconoscimento colonne (${detectRes.status}).`);
+      }
 
       // Step 3: Execute
       const execRes = await fetch("/api/import", {
@@ -83,13 +105,32 @@ export default function ImportPage() {
           dryRun,
         }),
       });
-      const execData = await execRes.json();
+      const execData = await execRes.json() as ImportJob & { error?: string };
+      if (!execRes.ok) {
+        throw new Error(execData.error || `Errore durante l'esecuzione dell'import (${execRes.status}).`);
+      }
+
       setResult(execData);
       if (!dryRun) {
         setJobs(prev => [execData, ...prev]);
+        showToast({
+          title: "Import completato",
+          description: `${execData.successRows} righe importate con successo.`,
+          variant: "success",
+        });
+      } else {
+        showToast({
+          title: "Validazione completata",
+          description: `${execData.successRows} righe valide, ${execData.errorRows} errori.`,
+          variant: "info",
+        });
       }
     } catch (err) {
-      console.error("Import error:", err);
+      showToast({
+        title: "Importazione non riuscita",
+        description: (err as Error).message,
+        variant: "error",
+      });
     } finally {
       setImporting(false);
     }
@@ -97,18 +138,36 @@ export default function ImportPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw className="h-8 w-8 animate-spin text-lime-600" />
+      <div className="space-y-8">
+        <PageHeader eyebrow="Dati" title="Importazione Dati" description="Importa membri, dati energetici e finanziari da Excel/CSV." />
+        <div className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm">
+          <Skeleton className="h-6 w-36 mb-4" />
+          <Skeleton className="h-3 w-full rounded-full mb-4" />
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-8">
+        <PageHeader eyebrow="Dati" title="Importazione Dati" description="Importa membri, dati energetici e finanziari da Excel/CSV." />
+        <FetchError
+          title="Impossibile caricare i dati di importazione"
+          description="Verifica la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => { setLoading(true); void fetchData(); }}
+        />
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-lime-950">Importazione Dati</h1>
-        <p className="text-zinc-500 mt-1">Importa membri, dati energetici e finanziari da Excel/CSV.</p>
-      </div>
+      <PageHeader eyebrow="Dati" title="Importazione Dati" description="Importa membri, dati energetici e finanziari da Excel/CSV." />
 
       {/* Onboarding Progress */}
       {onboarding && (

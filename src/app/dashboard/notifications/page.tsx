@@ -109,29 +109,39 @@ export default function NotificationsPage() {
 
   const markRead = async (id: string) => {
     try {
-      await fetch("/api/notifications", {
+      const response = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark-read", notificationId: id }),
       });
+      if (!response.ok) throw new Error(`Errore ${response.status}`);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
-    } catch {
-      // Silently fail for single-mark — user can retry
+    } catch (e) {
+      showToast({
+        title: "Impossibile aggiornare la notifica",
+        description: (e as Error).message,
+        variant: "error",
+      });
     }
   };
 
   const markAllRead = async () => {
     try {
-      await fetch("/api/notifications", {
+      const response = await fetch("/api/notifications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "mark-all-read" }),
       });
+      if (!response.ok) throw new Error(`Errore ${response.status}`);
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
-    } catch {
-      // Silently fail — user can retry
+    } catch (e) {
+      showToast({
+        title: "Impossibile segnare tutte come lette",
+        description: (e as Error).message,
+        variant: "error",
+      });
     }
   };
 

@@ -1,25 +1,55 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FileText, Download } from "lucide-react";
 import type { GseReportData } from "@/lib/gse-reporting";
+import { FetchError } from "@/components/ui/fetch-error";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
 
+function GseReportsSkeleton() {
+  return (
+    <div className="space-y-8">
+      <section className="rounded-3xl border border-amber-200 bg-white/90 p-8 shadow-lg shadow-amber-100/40">
+        <Skeleton className="h-4 w-48 mb-3" />
+        <Skeleton className="h-10 w-96" />
+        <Skeleton className="mt-4 h-5 w-full max-w-2xl" />
+      </section>
+      <div className="flex flex-wrap gap-2">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-24 rounded-full" />)}
+      </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
+            <Skeleton className="h-4 w-28 mb-3" />
+            <Skeleton className="h-8 w-20" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function GseReportsPage() {
   const [report, setReport] = useState<GseReportData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState("Apr 2025");
 
   const periods = ["Nov 2024", "Dic 2024", "Gen 2025", "Feb 2025", "Mar 2025", "Apr 2025"];
 
   const loadReport = useCallback(async (period: string) => {
+    setError(null);
+    setReport(null);
     try {
       const res = await fetch(`/api/gse-reports?period=${encodeURIComponent(period)}`);
+      if (!res.ok) throw new Error(`Errore ${res.status}`);
       const data = (await res.json()) as GseReportData;
       setReport(data);
-    } catch {
-      // keep previous report
+    } catch (e) {
+      setError((e as Error).message || "Impossibile caricare il report GSE.");
     } finally {
       setLoading(false);
     }
@@ -64,9 +94,18 @@ export default function GseReportsPage() {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-zinc-500">Generazione report in corso...</p>}
+      {loading && <GseReportsSkeleton />}
 
-      {report && !loading && (
+      {error && !loading && (
+        <FetchError
+          title="Impossibile caricare il report GSE"
+          description="Verifica la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => { setLoading(true); void loadReport(selectedPeriod); }}
+        />
+      )}
+
+      {report && !loading && !error && (
         <>
           <div className="grid gap-4 md:grid-cols-4">
             <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
@@ -84,7 +123,7 @@ export default function GseReportsPage() {
             <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
               <p className="text-sm font-medium text-zinc-500">Stato report</p>
               <p className={`mt-2 text-2xl font-bold ${report.status === "validato" ? "text-lime-700" : "text-amber-700"}`}>
-                {report.status === "validato" ? "✓ Validato" : "⚠ Bozza"}
+                {report.status === "validato" ? "Validato" : "Bozza"}
               </p>
             </div>
           </div>
@@ -95,7 +134,7 @@ export default function GseReportsPage() {
               <div className="mt-6 space-y-3">
                 {report.validationChecks.map((check) => (
                   <div key={check.id} className="flex items-start gap-3 rounded-2xl border border-lime-50 bg-amber-50/40 p-4">
-                    <span className={`mt-0.5 text-lg ${check.passed ? "text-lime-600" : "text-red-500"}`}>
+                    <span className={`mt-0.5 text-lg font-bold ${check.passed ? "text-lime-600" : "text-red-500"}`}>
                       {check.passed ? "✓" : "✗"}
                     </span>
                     <div>
@@ -114,15 +153,17 @@ export default function GseReportsPage() {
                 <div className="mt-6 grid gap-3">
                   <a
                     href={`/api/gse-reports?period=${encodeURIComponent(selectedPeriod)}&format=csv`}
-                    className="inline-flex items-center justify-center rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700"
+                    aria-label={`Scarica report ${selectedPeriod} in formato CSV`}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-lime-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-lime-200 transition hover:bg-lime-700"
                   >
-                    📊 Scarica CSV
+                    <Download className="h-4 w-4" /> Scarica CSV
                   </a>
                   <a
                     href={`/api/gse-reports?period=${encodeURIComponent(selectedPeriod)}&format=xml`}
-                    className="inline-flex items-center justify-center rounded-2xl border border-lime-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-lime-50"
+                    aria-label={`Scarica report ${selectedPeriod} in formato XML`}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl border border-lime-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-lime-50"
                   >
-                    📄 Scarica XML
+                    <FileText className="h-4 w-4" /> Scarica XML
                   </a>
                 </div>
               </div>

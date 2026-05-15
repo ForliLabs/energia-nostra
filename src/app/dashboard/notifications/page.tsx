@@ -5,6 +5,7 @@ import { Bell, Check, CheckCheck, Mail, Smartphone, Settings } from "lucide-reac
 import { DataFreshness } from "@/components/ui/data-freshness";
 import { FetchError } from "@/components/ui/fetch-error";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/components/ui/toast-provider";
 
 interface Notification {
   id: string;
@@ -62,6 +63,7 @@ function NotificationsSkeleton() {
 }
 
 export default function NotificationsPage() {
+  const { showToast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [preferences, setPreferences] = useState<PreferenceCategory[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -69,6 +71,8 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  // Track which preference fields are currently being saved
+  const [savingPrefs, setSavingPrefs] = useState<Set<string>>(new Set());
 
   const fetchData = useCallback(async () => {
     setError(null);
@@ -99,37 +103,9 @@ export default function NotificationsPage() {
   }, []);
 
   useEffect(() => {
-    let active = true;
-    (async () => {
-      setError(null);
-      try {
-        const [notifData, countData, prefsData] = await Promise.all([
-          fetch("/api/notifications").then(r => {
-            if (!r.ok) throw new Error(`Errore ${r.status}`);
-            return r.json();
-          }),
-          fetch("/api/notifications?view=unread-count").then(r => {
-            if (!r.ok) throw new Error(`Errore ${r.status}`);
-            return r.json();
-          }),
-          fetch("/api/notifications?view=preferences").then(r => {
-            if (!r.ok) throw new Error(`Errore ${r.status}`);
-            return r.json();
-          }),
-        ]);
-        if (!active) return;
-        setNotifications(notifData.notifications || []);
-        setUnreadCount(countData.count || 0);
-        setPreferences(prefsData.preferences?.categories || []);
-        setLastUpdated(new Date().toISOString());
-      } catch (caughtError) {
-        if (active) setError((caughtError as Error).message || "Impossibile caricare le notifiche.");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => { active = false; };
-  }, []);
+    const timer = window.setTimeout(() => { void fetchData(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [fetchData]);
 
   const markRead = async (id: string) => {
     try {
@@ -156,6 +132,52 @@ export default function NotificationsPage() {
       setUnreadCount(0);
     } catch {
       // Silently fail — user can retry
+    }
+  };
+
+  const updatePreference = async (
+    category: string,
+    field: "pushEnabled" | "emailEnabled" | "inAppEnabled",
+    newValue: boolean,
+  ) => {
+    const key = `${category}-${field}`;
+    // Guard: if the preference record doesn't exist, do nothing — no optimistic mutation, no inconsistent state.
+    const pref = preferences.find(p => p.category === category);
+    if (!pref) return;
+
+    // Optimistic update
+    setPreferences(prev =>
+      prev.map(p => p.category === category ? { ...p, [field]: newValue } : p),
+    );
+    setSavingPrefs(prev => new Set(prev).add(key));
+
+    try {
+      const updated = { ...pref, [field]: newValue };
+      const r = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "update-preference",
+          category,
+          pushEnabled: updated.pushEnabled,
+          emailEnabled: updated.emailEnabled,
+          inAppEnabled: updated.inAppEnabled,
+        }),
+      });
+      if (!r.ok) throw new Error(`Errore ${r.status}`);
+      showToast({ title: "Preferenza aggiornata", variant: "success" });
+    } catch (e) {
+      // Revert optimistic update
+      setPreferences(prev =>
+        prev.map(p => p.category === category ? { ...p, [field]: !newValue } : p),
+      );
+      showToast({
+        title: "Impossibile aggiornare la preferenza",
+        description: (e as Error).message,
+        variant: "error",
+      });
+    } finally {
+      setSavingPrefs(prev => { const next = new Set(prev); next.delete(key); return next; });
     }
   };
 
@@ -261,40 +283,58 @@ export default function NotificationsPage() {
         <div className="rounded-2xl border border-lime-100 bg-white">
           <div className="border-b border-lime-100 px-6 py-4">
             <h2 className="text-lg font-semibold text-lime-950">Preferenze di Notifica</h2>
-            <p className="text-sm text-zinc-500 mt-1">Scegli come ricevere le notifiche per ogni categoria.</p>
+            <p className="text-sm text-zinc-500 mt-1">Scegli come ricevere le notifiche per ogni categoria. Le modifiche vengono salvate automaticamente.</p>
           </div>
           <div className="divide-y divide-zinc-50">
+            {/* Visible column headers for the checkbox matrix */}
+            <div
+              aria-hidden="true"
+              className="flex items-center justify-between bg-zinc-50/70 px-6 py-2 text-xs font-semibold text-zinc-400"
+            >
+              <span>Categoria</span>
+              <div className="flex items-center gap-5">
+                <span className="flex shrink-0 items-center gap-1.5"><Bell className="h-3.5 w-3.5" />App</span>
+                <span className="flex shrink-0 items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" />Push</span>
+                <span className="flex shrink-0 items-center gap-1.5"><Mail className="h-3.5 w-3.5" />Email</span>
+              </div>
+            </div>
             {preferences.map((pref) => (
               <div key={pref.category} className="flex items-center justify-between px-6 py-4">
                 <div>
                   <p className="text-sm font-medium text-lime-950">{categoryLabels[pref.category] || pref.category}</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                <div className="flex items-center gap-5">
+                  <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none" title="In-app">
                     <Bell className="h-3.5 w-3.5" />
                     <input
                       type="checkbox"
                       checked={pref.inAppEnabled}
-                      onChange={() => {}}
-                      className="rounded border-zinc-300"
+                      disabled={savingPrefs.has(`${pref.category}-inAppEnabled`)}
+                      onChange={(e) => void updatePreference(pref.category, "inAppEnabled", e.target.checked)}
+                      className="rounded border-zinc-300 accent-lime-600 cursor-pointer"
+                      aria-label={`Notifica in-app per ${categoryLabels[pref.category] || pref.category}`}
                     />
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none" title="Push">
                     <Smartphone className="h-3.5 w-3.5" />
                     <input
                       type="checkbox"
                       checked={pref.pushEnabled}
-                      onChange={() => {}}
-                      className="rounded border-zinc-300"
+                      disabled={savingPrefs.has(`${pref.category}-pushEnabled`)}
+                      onChange={(e) => void updatePreference(pref.category, "pushEnabled", e.target.checked)}
+                      className="rounded border-zinc-300 accent-lime-600 cursor-pointer"
+                      aria-label={`Notifica push per ${categoryLabels[pref.category] || pref.category}`}
                     />
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs text-zinc-500">
+                  <label className="flex items-center gap-1.5 text-xs text-zinc-500 cursor-pointer select-none" title="Email">
                     <Mail className="h-3.5 w-3.5" />
                     <input
                       type="checkbox"
                       checked={pref.emailEnabled}
-                      onChange={() => {}}
-                      className="rounded border-zinc-300"
+                      disabled={savingPrefs.has(`${pref.category}-emailEnabled`)}
+                      onChange={(e) => void updatePreference(pref.category, "emailEnabled", e.target.checked)}
+                      className="rounded border-zinc-300 accent-lime-600 cursor-pointer"
+                      aria-label={`Notifica email per ${categoryLabels[pref.category] || pref.category}`}
                     />
                   </label>
                 </div>
@@ -306,3 +346,4 @@ export default function NotificationsPage() {
     </div>
   );
 }
+

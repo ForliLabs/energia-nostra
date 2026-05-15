@@ -4,7 +4,9 @@ import { ArrowRightLeft, Coins, HandCoins, Package, PlusCircle, TrendingUp, Wall
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TradeOffer, TradeRecord, TradingStats } from "@/lib/trading";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatsSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast-provider";
 import { getMutationHeaders } from "@/hooks/mutation-headers";
 
@@ -171,8 +173,16 @@ export default function TradingPage() {
         }
       />
 
-      {loading && !data ? <p className="text-sm text-zinc-500">Caricamento mercato P2P...</p> : null}
-      {error && !data ? <EmptyState title="Impossibile caricare il trading" description={error} /> : null}
+      {loading && !data ? <StatsSkeleton count={4} /> : null}
+      {error && !data ? (
+        <FetchError
+          title="Impossibile caricare il trading"
+          description="Verifica la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => { void loadData(); }}
+          retrying={loading}
+        />
+      ) : null}
 
       {data ? (
         <>

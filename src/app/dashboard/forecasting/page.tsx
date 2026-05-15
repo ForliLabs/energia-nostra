@@ -4,7 +4,9 @@ import { CloudSun, Coins, ShieldCheck, SunMedium, TrendingUp, Zap } from "lucide
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ForecastDashboard, ForecastResult, OptimalWindow, WeatherForecast } from "@/lib/forecasting";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatsSkeleton } from "@/components/ui/skeleton";
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(value);
@@ -110,8 +112,16 @@ export default function ForecastingPage() {
         }
       />
 
-      {loading && !dashboard ? <p className="text-sm text-zinc-500">Caricamento forecasting...</p> : null}
-      {error && !dashboard ? <EmptyState title="Impossibile caricare le previsioni" description={error} /> : null}
+      {loading && !dashboard ? <StatsSkeleton count={5} /> : null}
+      {error && !dashboard ? (
+        <FetchError
+          title="Impossibile caricare le previsioni"
+          description="Verifica la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => { void loadData(); }}
+          retrying={loading}
+        />
+      ) : null}
 
       {dashboard ? (
         <>

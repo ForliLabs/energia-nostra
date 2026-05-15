@@ -4,7 +4,9 @@ import { Medal, Sparkles, Target, Trophy, Users } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AchievementInfo, ChallengeInfo, LeaderboardEntry, SmartNudge } from "@/lib/gamification";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatsSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast-provider";
 import { getMutationHeaders } from "@/hooks/mutation-headers";
 
@@ -101,8 +103,16 @@ export default function GamificationPage() {
         description="La gamification ora è personale: vedi la tua posizione, i badge già maturati, i prossimi obiettivi e puoi aderire alle sfide attive senza passaggi manuali." 
       />
 
-      {loading && !data ? <p className="text-sm text-zinc-500">Caricamento badge e challenge...</p> : null}
-      {error && !data ? <EmptyState title="Impossibile caricare la gamification" description={error} /> : null}
+      {loading && !data ? <StatsSkeleton count={4} /> : null}
+      {error && !data ? (
+        <FetchError
+          title="Impossibile caricare la gamification"
+          description="Verifica la connessione e riprova."
+          errorDetail={error}
+          onRetry={() => { void loadData(); }}
+          retrying={loading}
+        />
+      ) : null}
 
       {data ? (
         <>

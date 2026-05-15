@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getAnnouncements, getDocuments, getVotes } from "@/lib/data-db";
+
+export const metadata: Metadata = {
+  title: "Governance",
+  description: "Documenti, annunci e votazioni della comunità energetica rinnovabile.",
+};
 
 export const dynamic = "force-dynamic";
 

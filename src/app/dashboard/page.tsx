@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Leaf, ShieldCheck } from "lucide-react";
 import { DashboardChartsSection } from "@/components/charts/dashboard-charts-section";
@@ -12,6 +13,11 @@ import {
   recentActivity,
 } from "@/lib/data-db";
 import { formatCurrency } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Panoramica CER",
+  description: "Vista operativa della comunità energetica: membri attivi, energia condivisa, incentivi GSE e stato di salute complessivo.",
+};
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { OnboardingStepper } from "@/components/ui/onboarding-stepper";
@@ -12,6 +13,11 @@ import {
 } from "@/lib/data-db";
 import { getCurrentSession, type CurrentSessionUser } from "@/lib/session";
 import { formatCurrency } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Portale membro",
+  description: "Area personale del membro della CER con energia, incentivi e comunicazioni.",
+};
 
 export const dynamic = "force-dynamic";
 

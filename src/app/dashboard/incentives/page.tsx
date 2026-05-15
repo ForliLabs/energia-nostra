@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import {
@@ -8,6 +9,11 @@ import {
   gseReportingStatus,
 } from "@/lib/data-db";
 import { formatCurrency } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Incentivi GSE",
+  description: "Monitoraggio tariffa incentivante, maturato mensile, riparto per membro e stato delle pratiche GSE.",
+};
 
 export const dynamic = "force-dynamic";
 

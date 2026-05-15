@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import { DashboardChartsSection } from "@/components/charts/dashboard-charts-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getEnergyData, getEnergySummary, getMembers, optimizationSuggestions } from "@/lib/data-db";
 import { formatCurrency } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Bilancio energetico",
+  description: "Produzione, consumo e quota condivisa della comunità energetica con trend e suggerimenti di ottimizzazione.",
+};
 
 export const dynamic = "force-dynamic";
 

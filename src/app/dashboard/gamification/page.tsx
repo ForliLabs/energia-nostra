@@ -100,7 +100,7 @@ export default function GamificationPage() {
       <PageHeader
         eyebrow="Engagement comunità"
         title="Sfide & Badge"
-        description="La gamification ora è personale: vedi la tua posizione, i badge già maturati, i prossimi obiettivi e puoi aderire alle sfide attive senza passaggi manuali." 
+        description="Tieni traccia dei badge guadagnati, delle sfide attive e della classifica CER. Unisciti alle campagne direttamente da qui." 
       />
 
       {loading && !data ? <StatsSkeleton count={4} /> : null}

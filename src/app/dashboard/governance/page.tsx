@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getAnnouncements, getDocuments, getVotes } from "@/lib/data-db";
@@ -64,6 +65,16 @@ export default async function GovernancePage() {
                   <p className="mt-3 text-sm text-zinc-600">
                     Responsabile: {document.owner} · Ultimo aggiornamento: {document.updatedAt}
                   </p>
+                  {document.status === "da firmare" && (
+                    <div className="mt-3">
+                      <Link
+                        href="/dashboard/documents"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                      >
+                        ✍️ Firma ora →
+                      </Link>
+                    </div>
+                  )}
                 </article>
               ))
             )}
@@ -89,6 +100,16 @@ export default async function GovernancePage() {
                   </div>
                   <p className="mt-2 text-sm text-zinc-600">{vote.scheduledAt}</p>
                   <p className="mt-1 text-sm text-zinc-500">Quorum richiesto: {vote.quorum}</p>
+                  {vote.status === "aperta" && (
+                    <div className="mt-3">
+                      <Link
+                        href="/dashboard/voting"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-lime-300 bg-white px-3 py-2 text-xs font-semibold text-lime-800 transition hover:bg-lime-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+                      >
+                        🗳️ Vota ora →
+                      </Link>
+                    </div>
+                  )}
                 </article>
               ))
             )}

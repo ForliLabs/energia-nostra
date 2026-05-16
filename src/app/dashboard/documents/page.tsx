@@ -75,6 +75,7 @@ export default function DocumentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
   const [busyTemplateId, setBusyTemplateId] = useState<string | null>(null);
   const [busyDocumentId, setBusyDocumentId] = useState<string | null>(null);
@@ -116,8 +117,13 @@ export default function DocumentsPage() {
     [data, query],
   );
   const filteredDocuments = useMemo(
-    () => data?.documents.filter((document) => `${document.title} ${document.templateName}`.toLowerCase().includes(query.toLowerCase())) || [],
-    [data, query],
+    () =>
+      (data?.documents || []).filter((document) => {
+        const matchesQuery = `${document.title} ${document.templateName}`.toLowerCase().includes(query.toLowerCase());
+        const matchesStatus = statusFilter === "all" || document.status === statusFilter;
+        return matchesQuery && matchesStatus;
+      }),
+    [data, query, statusFilter],
   );
 
   const handleGenerate = async (templateId: string) => {
@@ -186,7 +192,43 @@ export default function DocumentsPage() {
         }
       />
 
-      {loading ? <p className="text-sm text-zinc-500">Caricamento documenti...</p> : null}
+      {loading ? (
+        <div className="space-y-6">
+          {/* Template cards skeleton */}
+          <div className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="h-5 w-5 rounded-full bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+              <div className="h-5 w-40 rounded-2xl bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+            </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border border-amber-100 bg-amber-50 p-5 space-y-3">
+                  <div className="h-3 w-20 rounded-full bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+                  <div className="h-5 w-40 rounded-2xl bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+                  <div className="h-3 w-full rounded-full bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+                  <div className="h-8 w-36 rounded-2xl bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Documents table skeleton */}
+          <div className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-5 w-5 rounded-full bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+              <div className="h-5 w-44 rounded-2xl bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+            </div>
+            <div className="space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-6 gap-3">
+                  {Array.from({ length: 6 }).map((__, j) => (
+                    <div key={j} className="h-10 rounded-2xl bg-zinc-200/80 animate-pulse" aria-hidden="true" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
       {error ? <EmptyState title="Impossibile caricare documenti e template" description={error} /> : null}
 
       {data ? (
@@ -228,15 +270,48 @@ export default function DocumentsPage() {
           </section>
 
           <section className="rounded-2xl border border-amber-100 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-3">
-              <FileSignature className="h-5 w-5 text-amber-700" />
-              <h2 className="text-lg font-semibold text-amber-900">Documenti generati</h2>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-3">
+                <FileSignature className="h-5 w-5 text-amber-700" />
+                <h2 className="text-lg font-semibold text-amber-900">Documenti generati</h2>
+              </div>
+              {/* Status filter tabs */}
+              <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Filtra per stato documento">
+                {(
+                  [
+                    { value: "all", label: "Tutti" },
+                    { value: "draft", label: "Bozza" },
+                    { value: "review", label: "Review" },
+                    { value: "signing", label: "Firma in corso" },
+                    { value: "signed", label: "Firmato" },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={statusFilter === tab.value}
+                    onClick={() => setStatusFilter(tab.value)}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      statusFilter === tab.value
+                        ? "bg-amber-700 text-white"
+                        : "bg-amber-50 text-amber-800 hover:bg-amber-100"
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
             </div>
             {filteredDocuments.length === 0 ? (
               <div className="mt-6">
                 <EmptyState
-                  title="Nessun documento generato"
-                  description="Genera il primo documento da template per avviare il workflow di review e firma digitale."
+                  title={statusFilter !== "all" ? `Nessun documento con stato "${documentStatusLabels[statusFilter] ?? statusFilter}"` : "Nessun documento generato"}
+                  description={
+                    statusFilter !== "all"
+                      ? "Prova a cambiare filtro o cerca con altri termini per trovare i documenti."
+                      : "Genera il primo documento da template per avviare il workflow di review e firma digitale."
+                  }
                 />
               </div>
             ) : (

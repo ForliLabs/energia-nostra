@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, ArrowRight, RotateCcw, RefreshCw } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, RotateCcw, RefreshCw, Paperclip, Download } from "lucide-react";
 import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,16 +32,88 @@ const importTypeLabels: Record<string, string> = {
   financial: "Dati Finanziari",
 };
 
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+const templateCsvContent: Record<string, string> = {
+  members: "Nome;POD;Tipo;Comune;Data Adesione\nEsempio Membro;IT001E12345678;consumatore;Forlì;01/01/2024",
+  energy_data: "POD;Mese;Consumo kWh;Produzione kWh\nIT001E12345678;Gennaio 2024;350;0",
+  financial: "Nome;Periodo;Importo;Tipo\nEsempio Membro;2024-Q1;125.50;incentivo",
+};
+
+const templateFileNames: Record<string, string> = {
+  members: "template-membri.csv",
+  energy_data: "template-dati-energetici.csv",
+  financial: "template-dati-finanziari.csv",
+};
+
+function downloadTemplateCsv(type: string) {
+  const content = templateCsvContent[type];
+  if (!content) return;
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = templateFileNames[type] ?? `template-${type}.csv`;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+const formatHints: Record<string, string> = {
+  members: "Formato atteso: Nome;POD;Tipo;Comune;Data Adesione — separatore punto e virgola, intestazione obbligatoria",
+  energy_data: "Formato atteso: POD;Mese;Consumo kWh;Produzione kWh — separatore punto e virgola, intestazione obbligatoria",
+  financial: "Formato atteso: Nome;Periodo;Importo;Tipo — separatore punto e virgola, intestazione obbligatoria",
+};
+
 export default function ImportPage() {
   const { showToast } = useToast();
   const [jobs, setJobs] = useState<ImportJob[]>([]);
   const [onboarding, setOnboarding] = useState<{ steps: OnboardingStep[]; completionPct: number } | null>(null);
   const [selectedType, setSelectedType] = useState<string>("members");
   const [csvContent, setCsvContent] = useState("");
+  const [pickedFileName, setPickedFileName] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFilePick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      showToast({
+        title: "File troppo grande",
+        description: `Il file supera il limite di ${MAX_FILE_SIZE_MB} MB. Riduci le righe o suddividi il file prima di importare.`,
+        variant: "error",
+      });
+      // Reset input so the same file can trigger onChange again if user retries
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setPickedFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result;
+      if (typeof text === "string") {
+        setCsvContent(text);
+      }
+    };
+    reader.onerror = () => {
+      showToast({
+        title: "Errore lettura file",
+        description: "Impossibile leggere il file selezionato. Verifica che il file non sia corrotto e riprova.",
+        variant: "error",
+      });
+      setPickedFileName(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsText(file, "UTF-8");
+  };
 
   const fetchData = useCallback(async () => {
     setError(null);
@@ -210,7 +282,7 @@ export default function ImportPage() {
             {["members", "energy_data", "financial"].map(type => (
               <button
                 key={type}
-                onClick={() => setSelectedType(type)}
+                onClick={() => { setSelectedType(type); setCsvContent(""); setPickedFileName(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
                 className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors ${selectedType === type ? "bg-lime-100 text-lime-950 ring-1 ring-lime-200" : "bg-zinc-50 text-zinc-600 hover:bg-zinc-100"}`}
               >
                 <FileSpreadsheet className="h-4 w-4" />
@@ -222,8 +294,23 @@ export default function ImportPage() {
 
         {/* CSV Input */}
         <div className="mb-4">
-          <label className="text-sm font-medium text-zinc-700 mb-2 block">Dati CSV</label>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <label htmlFor="csv-textarea" className="text-sm font-medium text-zinc-700">Dati CSV</label>
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-600 transition hover:bg-zinc-100">
+              <Paperclip className="h-3.5 w-3.5" />
+              {pickedFileName ?? "Scegli file CSV"}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.txt"
+                className="sr-only"
+                onChange={handleFilePick}
+                aria-label="Carica file CSV"
+              />
+            </label>
+          </div>
           <textarea
+            id="csv-textarea"
             value={csvContent}
             onChange={(e) => setCsvContent(e.target.value)}
             placeholder={selectedType === "members"
@@ -234,6 +321,9 @@ export default function ImportPage() {
             }
             className="w-full h-40 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-mono focus:border-lime-400 focus:outline-none focus:ring-2 focus:ring-lime-100"
           />
+          <p className="mt-1.5 text-xs text-zinc-500">
+            <span className="font-medium">Suggerimento formato:</span> {formatHints[selectedType]}. Dimensione massima: {MAX_FILE_SIZE_MB} MB.
+          </p>
         </div>
 
         {/* Actions */}
@@ -344,14 +434,19 @@ export default function ImportPage() {
             { type: "energy_data", desc: "POD, Mese, Consumo kWh, Produzione kWh" },
             { type: "financial", desc: "Nome, Periodo, Importo, Tipo" },
           ].map(t => (
-            <div key={t.type} className="flex items-center gap-3 rounded-xl border border-zinc-100 p-4">
-              <FileSpreadsheet className="h-8 w-8 text-lime-500" />
-              <div>
+            <button
+              key={t.type}
+              type="button"
+              onClick={() => downloadTemplateCsv(t.type)}
+              className="flex items-center gap-3 rounded-xl border border-zinc-100 p-4 text-left transition hover:border-lime-200 hover:bg-lime-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lime-400"
+            >
+              <FileSpreadsheet className="h-8 w-8 text-lime-500 shrink-0" />
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-lime-950">{importTypeLabels[t.type]}</p>
                 <p className="text-xs text-zinc-500">{t.desc}</p>
               </div>
-              <ArrowRight className="h-4 w-4 text-zinc-400 ml-auto" />
-            </div>
+              <Download className="h-4 w-4 text-lime-600 shrink-0" aria-hidden="true" />
+            </button>
           ))}
         </div>
       </div>

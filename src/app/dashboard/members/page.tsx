@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getMemberBenefitStatement, type CerMember, cerMembers, type MemberType } from "@/lib/data";
+import { getMemberBenefitStatement, type CerMember, type MemberType } from "@/lib/data";
 import { DataFreshness } from "@/components/ui/data-freshness";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton, TableSkeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast-provider";
 
 const formatCurrency = (value: number) =>
@@ -33,7 +35,7 @@ function isApiError(value: unknown): value is { error: string } {
 
 export default function MembersPage() {
   const { showToast } = useToast();
-  const [members, setMembers] = useState<CerMember[]>(cerMembers);
+  const [members, setMembers] = useState<CerMember[]>([]);
   const [form, setForm] = useState<FormState>({
     name: "",
     type: "prosumer",
@@ -41,6 +43,7 @@ export default function MembersPage() {
     energyBalanceKwh: "120",
   });
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -52,38 +55,39 @@ export default function MembersPage() {
         throw new Error(`Errore ${response.status}: impossibile caricare l'anagrafica.`);
       }
       const data: CerMember[] = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         setMembers(data);
       }
       setLastUpdated(new Date().toISOString());
     } catch (caughtError) {
       setFetchError((caughtError as Error).message);
+    } finally {
+      setInitialLoading(false);
     }
   }, []);
 
   useEffect(() => {
     let active = true;
-
-    fetch("/api/members")
-      .then((response) => {
-        if (!response.ok) throw new Error(`Errore ${response.status}`);
-        return response.json();
-      })
-      .then((data: CerMember[]) => {
-        if (active && Array.isArray(data) && data.length > 0) {
+    (async () => {
+      setFetchError(null);
+      try {
+        const response = await fetch("/api/members");
+        if (!response.ok) {
+          throw new Error(`Errore ${response.status}: impossibile caricare l'anagrafica.`);
+        }
+        const data: CerMember[] = await response.json();
+        if (!active) return;
+        if (Array.isArray(data)) {
           setMembers(data);
-          setLastUpdated(new Date().toISOString());
         }
-      })
-      .catch((err) => {
-        if (active) {
-          setFetchError((err as Error).message);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
+        setLastUpdated(new Date().toISOString());
+      } catch (caughtError) {
+        if (active) setFetchError((caughtError as Error).message);
+      } finally {
+        if (active) setInitialLoading(false);
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   const counters = useMemo(
@@ -167,6 +171,20 @@ export default function MembersPage() {
         />
       ) : null}
 
+      {initialLoading ? (
+        <>
+          <div className="grid gap-4 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="mt-3 h-9 w-16" />
+              </div>
+            ))}
+          </div>
+          <TableSkeleton rows={5} columns={5} />
+        </>
+      ) : (
+        <>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
           <p className="text-sm font-medium text-zinc-500">Produttori</p>
@@ -254,6 +272,14 @@ export default function MembersPage() {
               {members.length} record
             </span>
           </div>
+          {members.length === 0 && !fetchError ? (
+            <div className="mt-6">
+              <EmptyState
+                title="Nessun membro registrato"
+                description="Aggiungi il primo membro della CER usando il modulo qui a fianco. Una volta inseriti, troverai qui l'anagrafica completa con POD, saldo energetico e statement di beneficio mensile."
+              />
+            </div>
+          ) : (
           <div className="mt-6 overflow-x-auto">
             <table className="min-w-full divide-y divide-lime-100 text-sm">
               <thead>
@@ -285,8 +311,11 @@ export default function MembersPage() {
               </tbody>
             </table>
           </div>
+          )}
         </section>
       </div>
+        </>
+      )}
     </div>
   );
 }

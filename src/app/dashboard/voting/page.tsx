@@ -310,7 +310,7 @@ export default function VotingPage() {
             <button
               key={vote.id}
               type="button"
-              onClick={() => setSelectedVote(vote.id)}
+              onClick={() => { setSelectedVote(vote.id); setFeedback(null); }}
               className={`w-full rounded-2xl border p-5 text-left transition ${
                 selectedVote === vote.id ? "border-lime-500 bg-lime-50/70 ring-1 ring-lime-200" : "border-amber-100 bg-amber-50/70 hover:border-lime-300"
               }`}

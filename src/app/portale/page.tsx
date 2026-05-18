@@ -5,10 +5,12 @@ import { OnboardingStepper } from "@/components/ui/onboarding-stepper";
 import {
   getAnnouncements,
   getCerProfile,
+  getDocuments,
   getEnergyData,
   getEnergySummary,
   getIncentiveDistribution,
   getMembers,
+  getVotes,
   optimizationSuggestions,
 } from "@/lib/data-db";
 import { getCurrentSession, type CurrentSessionUser } from "@/lib/session";
@@ -68,14 +70,19 @@ export default async function MemberPortalPage({
     );
   }
 
-  const [cerProfile, members, energyData, energySummary, incentives, announcements] = await Promise.all([
+  const [cerProfile, members, energyData, energySummary, incentives, announcements, governanceDocs, governanceVotes] = await Promise.all([
     getCerProfile(session.user.cerId || undefined),
     getMembers(session.user.cerId || undefined),
     getEnergyData(session.user.cerId || undefined),
     getEnergySummary(session.user.cerId || undefined),
     getIncentiveDistribution(session.user.cerId || undefined),
     getAnnouncements(session.user.cerId || undefined),
+    getDocuments(session.user.cerId || undefined),
+    getVotes(session.user.cerId || undefined),
   ]);
+
+  const docsToSign = governanceDocs.filter((d) => d.status === "da firmare");
+  const openVotes = governanceVotes.filter((v) => v.status === "aperta");
 
   const member = resolveMemberForUser(session.user, members);
   const latestEnergyMonth = energyData[energyData.length - 1];
@@ -186,17 +193,69 @@ export default async function MemberPortalPage({
         ) : null}
 
         <section className="grid gap-4 lg:grid-cols-3">
-          {[
-            { title: "Account attivo", description: "Accesso completato: puoi consultare fatture, energia condivisa e documenti personali.", tone: "bg-lime-50 border-lime-100" },
-            { title: "Profilo associato", description: `Il tuo account è abbinato a ${member.podCode} e viene usato per calcolare incentivi e statement.`, tone: "bg-white border-lime-100" },
-            { title: "Prossimo passo", description: "Controlla documenti da firmare e votazioni aperte per chiudere l'onboarding operativo.", tone: "bg-amber-50/80 border-amber-200" },
-          ].map((card) => (
-            <article key={card.title} className={`rounded-3xl border p-6 shadow-sm ${card.tone}`}>
-              <h2 className="text-lg font-bold text-zinc-950">{card.title}</h2>
-              <p className="mt-3 text-sm leading-6 text-zinc-600">{card.description}</p>
-            </article>
-          ))}
+          <article className="rounded-3xl border border-lime-100 bg-lime-50 p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">Account attivo</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-600">Accesso completato: puoi consultare fatture, energia condivisa e documenti personali.</p>
+          </article>
+          <article className="rounded-3xl border border-lime-100 bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">Profilo associato</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-600">{`Il tuo account è abbinato a ${member.podCode} e viene usato per calcolare incentivi e statement.`}</p>
+          </article>
+          <article className="rounded-3xl border border-amber-200 bg-amber-50/80 p-6 shadow-sm">
+            <h2 className="text-lg font-bold text-zinc-950">Prossimo passo</h2>
+            <p className="mt-3 text-sm leading-6 text-zinc-600">Controlla documenti da firmare e votazioni aperte per chiudere l&apos;onboarding operativo.</p>
+          </article>
         </section>
+
+        {/* Pending-actions inbox */}
+        {docsToSign.length > 0 || openVotes.length > 0 ? (
+          <section aria-label="Aggiornamenti CER" className="rounded-3xl border border-amber-200 bg-amber-50/80 p-8 shadow-sm">
+            <h2 className="text-xl font-bold text-zinc-950">Aggiornamenti della comunità</h2>
+            <p className="mt-1 text-sm text-zinc-600">Novità dalla tua comunità energetica che potrebbero richiedere la tua attenzione.</p>
+            <ul className="mt-5 space-y-3">
+              {docsToSign.map((doc) => (
+                <li key={doc.id}>
+                  <Link
+                    href="/dashboard/documents"
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-amber-200 bg-white px-5 py-4 text-sm transition hover:border-lime-300 hover:bg-lime-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">Documento CER</span>
+                      <span className="font-semibold text-zinc-950">{doc.title}</span>
+                      <span className="text-xs text-zinc-500">{doc.owner}</span>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-lime-700">Vai ai documenti →</span>
+                  </Link>
+                </li>
+              ))}
+              {openVotes.map((vote) => (
+                <li key={vote.id}>
+                  <Link
+                    href="/dashboard/voting"
+                    className="flex items-center justify-between gap-4 rounded-2xl border border-lime-200 bg-white px-5 py-4 text-sm transition hover:border-lime-400 hover:bg-lime-50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="rounded-full bg-lime-100 px-2 py-0.5 text-xs font-semibold text-lime-800">Votazione aperta</span>
+                      <span className="font-semibold text-zinc-950">{vote.title}</span>
+                      <span className="text-xs text-zinc-500">Quorum: {vote.quorum}</span>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-lime-700">Vai alle votazioni →</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <section aria-label="Nessuna azione in attesa" className="rounded-3xl border border-lime-200 bg-lime-50 p-8 shadow-sm">
+            <div className="flex items-center gap-4">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-lime-100 text-2xl" role="img" aria-hidden="true">✅</span>
+              <div>
+                <h2 className="text-xl font-bold text-lime-900">Tutto in ordine</h2>
+                <p className="mt-1 text-sm text-zinc-600">Nessun aggiornamento dalla CER al momento: nessun documento in attesa di firma né votazioni aperte.</p>
+              </div>
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-lime-100 bg-white/90 p-6 shadow-sm">
@@ -344,7 +403,12 @@ export default async function MemberPortalPage({
         <section className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-100 to-lime-100 p-8 shadow-lg shadow-amber-100/40">
           <h2 className="text-2xl font-bold text-zinc-950">Azioni rapide</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            <Link href="/dashboard/voting" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+            <Link href="/dashboard/voting" className="group relative rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              {openVotes.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                  {openVotes.length}
+                </span>
+              )}
               <span className="text-2xl" role="img" aria-hidden="true">🗳️</span>
               <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Votazioni</span>
               <span className="mt-1 block text-xs text-zinc-500">Partecipa alle decisioni</span>
@@ -359,7 +423,12 @@ export default async function MemberPortalPage({
               <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Fatturazione</span>
               <span className="mt-1 block text-xs text-zinc-500">Consulta le fatture</span>
             </Link>
-            <Link href="/dashboard/documents" className="group rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+            <Link href="/dashboard/documents" className="group relative rounded-2xl border border-lime-200 bg-white p-4 text-center transition hover:bg-lime-50 hover:shadow-md">
+              {docsToSign.length > 0 && (
+                <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold text-white">
+                  {docsToSign.length}
+                </span>
+              )}
               <span className="text-2xl" role="img" aria-hidden="true">📋</span>
               <span className="mt-1 block text-sm font-semibold text-zinc-700 group-hover:text-lime-800">Documenti</span>
               <span className="mt-1 block text-xs text-zinc-500">Firma e scarica</span>

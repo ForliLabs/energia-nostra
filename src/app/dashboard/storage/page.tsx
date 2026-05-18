@@ -48,6 +48,7 @@ export default function StoragePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -73,6 +74,7 @@ export default function StoragePage() {
 
       setFolders(foldersData.folders || []);
       setFiles(filesData.files || []);
+      setConfirmDeleteId(null);
       setStats(statsData.stats || null);
     } catch (caughtError) {
       setError((caughtError as Error).message);
@@ -159,6 +161,7 @@ export default function StoragePage() {
         throw new Error(payload.error || "Impossibile eliminare il file.");
       }
       showToast({ title: "File rimosso", description: "L'archivio è stato aggiornato.", variant: "success" });
+      setConfirmDeleteId(null);
       await fetchData();
     } catch (caughtError) {
       showToast({ title: "Eliminazione non riuscita", description: (caughtError as Error).message, variant: "error" });
@@ -298,9 +301,31 @@ export default function StoragePage() {
                         <button onClick={() => void handleDownload(file.id)} className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-lime-600" aria-label={`Scarica ${file.fileName}`}>
                           <Download className="h-4 w-4" />
                         </button>
-                        <button onClick={() => void handleDelete(file.id)} className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-red-600" aria-label={`Elimina ${file.fileName}`}>
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {confirmDeleteId === file.id ? (
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => { setConfirmDeleteId(null); void handleDelete(file.id); }}
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                            >
+                              Elimina
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="rounded-lg px-2 py-1 text-xs text-zinc-500 transition hover:bg-zinc-100"
+                              aria-label="Annulla eliminazione"
+                            >
+                              Annulla
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(file.id)}
+                            className="rounded-lg p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-red-600"
+                            aria-label={`Elimina ${file.fileName}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

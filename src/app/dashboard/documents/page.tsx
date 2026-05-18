@@ -257,7 +257,7 @@ export default function DocumentsPage() {
                     <button
                       type="button"
                       onClick={() => void handleGenerate(template.id)}
-                      disabled={busyTemplateId !== null}
+                      disabled={busyTemplateId === template.id}
                       className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-amber-200 bg-white px-4 py-2 text-sm font-semibold text-amber-900 transition hover:bg-amber-100 disabled:opacity-60"
                     >
                       <PenTool className="h-4 w-4" />

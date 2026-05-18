@@ -6,6 +6,7 @@ import { DataFreshness } from "@/components/ui/data-freshness";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FetchError } from "@/components/ui/fetch-error";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast-provider";
 
 type VoteWithResults = VoteRecord & { results: VoteResults | null };
@@ -27,6 +28,36 @@ const statusLabels: Record<string, string> = {
 };
 
 const defaultOptions = ["Favorevole", "Contrario", "Astenuto"];
+
+/** Returns a short relative-time label for open/scheduled votes, or null for others. */
+function getUrgencyPill(vote: VoteWithResults): { label: string; className: string } | null {
+  const now = Date.now();
+  const scheduledMs = new Date(vote.scheduledAt).getTime();
+  const closesMs = new Date(vote.closesAt).getTime();
+
+  const formatRelative = (diffMs: number): string => {
+    const totalMinutes = Math.floor(diffMs / 60_000);
+    if (totalMinutes < 60) return `${totalMinutes} min`;
+    const totalHours = Math.floor(diffMs / 3_600_000);
+    if (totalHours < 24) return `${totalHours} ora${totalHours !== 1 ? "e" : ""}`;
+    const totalDays = Math.floor(diffMs / 86_400_000);
+    return `${totalDays} giorno${totalDays !== 1 ? "i" : ""}`;
+  };
+
+  if (vote.status === "aperta" && closesMs > now) {
+    const diff = closesMs - now;
+    const label = `Chiude tra ${formatRelative(diff)}`;
+    const urgent = diff < 24 * 3_600_000;
+    return { label, className: urgent ? "bg-red-100 text-red-700" : "bg-lime-100 text-lime-800" };
+  }
+
+  if (vote.status === "programmata" && scheduledMs > now) {
+    const diff = scheduledMs - now;
+    return { label: `Apre tra ${formatRelative(diff)}`, className: "bg-amber-100 text-amber-800" };
+  }
+
+  return null;
+}
 
 function createDefaultVoteForm() {
   const now = new Date();
@@ -57,6 +88,9 @@ export default function VotingPage() {
   const [currentUser, setCurrentUser] = useState<SessionUser>(null);
   const [newVote, setNewVote] = useState(createDefaultVoteForm);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  // Tracks the choice committed by the current user in-session, keyed by voteId.
+  // Only stored client-side to preserve secret-ballot constraints.
+  const [myChoices, setMyChoices] = useState<Record<string, string>>({});
 
   const loadVotes = useCallback(async () => {
     setLoadError(null);
@@ -124,6 +158,7 @@ export default function VotingPage() {
         throw new Error(data.error || "Errore nel voto.");
       }
       setFeedback("Voto registrato correttamente!");
+      setMyChoices((prev) => ({ ...prev, [voteId]: choice }));
       showToast({ title: "Voto registrato", description: "La tua preferenza è stata salvata nella votazione corrente.", variant: "success" });
       await loadVotes();
     } catch (caughtError) {
@@ -170,6 +205,8 @@ export default function VotingPage() {
 
   const selected = useMemo(() => votes.find((vote) => vote.id === selectedVote) || null, [selectedVote, votes]);
   const hasAlreadyVoted = Boolean(selected && currentUser && selected.ballots.some((ballot) => ballot.userId === currentUser.id));
+  // The choice committed in this session for the selected vote (if any)
+  const committedChoice = selected ? (myChoices[selected.id] ?? null) : null;
 
   return (
     <div className="space-y-8">
@@ -242,7 +279,13 @@ export default function VotingPage() {
         </section>
       ) : null}
 
-      {loading ? <p className="text-sm text-zinc-500">Caricamento votazioni...</p> : null}
+      {loading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 w-full" />
+          ))}
+        </div>
+      ) : null}
 
       {loadError ? (
         <FetchError
@@ -274,9 +317,12 @@ export default function VotingPage() {
             >
               <div className="flex items-center justify-between gap-4">
                 <h3 className="font-semibold text-zinc-950">{vote.title}</h3>
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses[vote.status] || ""}`}>
-                  {statusLabels[vote.status] || vote.status}
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  {(() => { const pill = getUrgencyPill(vote); return pill ? <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${pill.className}`}>{pill.label}</span> : null; })()}
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses[vote.status] || ""}`}>
+                    {statusLabels[vote.status] || vote.status}
+                  </span>
+                </div>
               </div>
               <p className="mt-2 text-sm text-zinc-600">{vote.description}</p>
               <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-500">
@@ -292,7 +338,10 @@ export default function VotingPage() {
         {selected ? (
           <section className="space-y-6">
             <div className="rounded-3xl border border-lime-100 bg-white/90 p-8 shadow-sm shadow-lime-100/40">
-              <h2 className="text-2xl font-bold text-zinc-950">{selected.title}</h2>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h2 className="text-2xl font-bold text-zinc-950">{selected.title}</h2>
+                {(() => { const pill = getUrgencyPill(selected); return pill ? <span className={`rounded-full px-3 py-1 text-sm font-semibold ${pill.className}`}>{pill.label}</span> : null; })()}
+              </div>
               <p className="mt-2 text-sm text-zinc-600">{selected.description}</p>
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl bg-amber-50/70 p-4 text-sm text-zinc-700">
@@ -343,18 +392,35 @@ export default function VotingPage() {
                 <div className="mt-6">
                   <h3 className="text-lg font-semibold text-zinc-950">Esprimi il tuo voto</h3>
                   {!currentUser ? <p className="mt-2 text-sm text-zinc-600">Accedi per usare i pulsanti di voto.</p> : null}
-                  {hasAlreadyVoted ? <p className="mt-2 text-sm text-lime-700">Hai già votato: non è necessario ripetere l&apos;operazione.</p> : null}
+                  {hasAlreadyVoted ? (
+                    <div className="mt-2 flex items-center gap-2">
+                      <span className="text-sm text-lime-700">Hai già votato per questa consultazione.</span>
+                      {committedChoice && (
+                        <span className="rounded-full bg-lime-100 px-3 py-1 text-xs font-semibold text-lime-800">
+                          ✓ La tua scelta: {committedChoice}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="mt-4 flex flex-wrap gap-3">
-                    {selected.options.map((option) => (
-                      <button
-                        key={option}
-                        onClick={() => void handleCastVote(selected.id, option)}
-                        disabled={castingVote || !currentUser || hasAlreadyVoted}
-                        className="rounded-2xl border border-lime-200 bg-white px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:border-lime-400 hover:bg-lime-50 disabled:opacity-60"
-                      >
-                        {option}
-                      </button>
-                    ))}
+                    {selected.options.map((option) => {
+                      const isPressed = committedChoice === option;
+                      return (
+                        <button
+                          key={option}
+                          onClick={() => void handleCastVote(selected.id, option)}
+                          disabled={castingVote || !currentUser || hasAlreadyVoted}
+                          aria-pressed={isPressed}
+                          className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:opacity-60 ${
+                            isPressed
+                              ? "border-lime-500 bg-lime-100 text-lime-900 ring-1 ring-lime-400"
+                              : "border-lime-200 bg-white text-zinc-700 hover:border-lime-400 hover:bg-lime-50"
+                          }`}
+                        >
+                          {isPressed ? `✓ ${option}` : option}
+                        </button>
+                      );
+                    })}
                   </div>
                   {feedback ? <p className="mt-3 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-zinc-700">{feedback}</p> : null}
                 </div>

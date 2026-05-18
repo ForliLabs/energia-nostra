@@ -155,7 +155,7 @@ export async function notifyFromEvent(event: DomainEvent): Promise<void> {
   const body = formatTemplate(config.bodyTemplate, event.payload as Record<string, unknown>);
 
   // Find affected users (all users in the CER)
-  const cerId = event.cerId || "cer-bertinoro";
+  const cerId = event.cerId || "cer-forli-centro";
   const users = await prisma.user.findMany({
     where: { cerId },
     select: { id: true },

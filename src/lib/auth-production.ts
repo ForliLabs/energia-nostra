@@ -291,7 +291,7 @@ export async function registerUserDb(
   password: string,
   name: string,
   role: UserRole = "member",
-  cerId: string | null = "cer-bertinoro"
+  cerId: string | null = "cer-forli-centro"
 ): Promise<SessionUser | null> {
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
   if (existing) return null;

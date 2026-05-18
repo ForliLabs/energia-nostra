@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
 
   const dashboard = await getFinancialDashboard(cerId);
   return Response.json(dashboard);
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     priority?: number;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
 
   if (body.action === "import-bank" && body.transactions) {
     const result = await importBankTransactions(cerId, body.transactions);

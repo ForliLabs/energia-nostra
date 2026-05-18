@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
 
   const jobs = await getImportJobs(cerId);
   return Response.json({ jobs });
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     dryRun?: boolean;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
   const userId = body.userId || "user-admin-1";
 
   switch (body.action) {

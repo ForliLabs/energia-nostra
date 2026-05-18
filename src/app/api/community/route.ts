@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
   const userId = searchParams.get("userId") || undefined;
   const view = searchParams.get("view"); // dashboard | comments | messages | referrals
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     inviteCode?: string; inviteeName?: string; inviteeEmail?: string;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
 
   if (body.action === "create-post") {
     if (!body.authorId || !body.authorName || !body.type || !body.content) {

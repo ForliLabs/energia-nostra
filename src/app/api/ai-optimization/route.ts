@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
   const view = searchParams.get("view"); // dashboard | hourly-profile
   const month = searchParams.get("month");
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     modelType?: string;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
 
   if (body.action === "train") {
     const model = await trainOptimizationModel(cerId, body.modelType || "arima");

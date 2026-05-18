@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
   const view = searchParams.get("view"); // dashboard | telemetry
   const deviceId = searchParams.get("deviceId");
 
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     metric?: string; value?: number; unit?: string;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
 
   if (body.action === "register-device") {
     if (!body.name || !body.type || !body.protocol) {

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const cerId = searchParams.get("cerId") || "cer-bertinoro";
+  const cerId = searchParams.get("cerId") || "cer-forli-centro";
   const view = searchParams.get("view"); // dashboard | submissions
 
   if (view === "submissions") {
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     reconciliationId?: string; resolution?: string;
   };
 
-  const cerId = body.cerId || "cer-bertinoro";
+  const cerId = body.cerId || "cer-forli-centro";
 
   if (body.action === "submit" && body.period && body.type && body.reportData) {
     const result = await submitToGse({

@@ -21,7 +21,7 @@ interface EventStreamState {
 
 export function useEventStream(options: UseEventStreamOptions = {}) {
   const {
-    cerId = "cer-bertinoro",
+    cerId = "cer-forli-centro",
     eventTypes,
     onEvent,
     autoReconnect = true,

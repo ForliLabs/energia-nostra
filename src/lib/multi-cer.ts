@@ -19,7 +19,7 @@ export interface CerSummary {
 // Seed data for multiple CERs
 export const multiCerData: CerSummary[] = [
   {
-    id: "cer-bertinoro",
+    id: "cer-forli-centro",
     name: "Energia Insieme Bertinoro",
     municipality: "Bertinoro",
     province: "Forlì-Cesena",

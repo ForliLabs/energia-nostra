@@ -99,7 +99,7 @@ async function ensureSeeded() {
     name: "Admin CER Bertinoro",
     passwordHash: hash,
     role: "admin",
-    cerId: "cer-bertinoro",
+    cerId: "cer-forli-centro",
   });
   users.set("membro@energianostra.it", {
     id: "user-member-1",
@@ -107,7 +107,7 @@ async function ensureSeeded() {
     name: "Mario Rossi",
     passwordHash: hash,
     role: "member",
-    cerId: "cer-bertinoro",
+    cerId: "cer-forli-centro",
   });
   users.set("auditor@energianostra.it", {
     id: "user-auditor-1",
@@ -115,7 +115,7 @@ async function ensureSeeded() {
     name: "Revisore CER",
     passwordHash: hash,
     role: "auditor",
-    cerId: "cer-bertinoro",
+    cerId: "cer-forli-centro",
   });
   users.set("super@energianostra.it", {
     id: "user-super-1",
@@ -159,10 +159,10 @@ export async function authenticateUser(email: string, password: string): Promise
  * @param password - Plaintext password (will be hashed).
  * @param name - Display name.
  * @param role - User role. Defaults to `"member"`.
- * @param cerId - CER to assign the user to. Defaults to `"cer-bertinoro"`.
+ * @param cerId - CER to assign the user to. Defaults to `"cer-forli-centro"`.
  * @returns The created user, or `null` if the email is already registered.
  */
-export async function registerUser(email: string, password: string, name: string, role: UserRole = "member", cerId: string | null = "cer-bertinoro"): Promise<SessionUser | null> {
+export async function registerUser(email: string, password: string, name: string, role: UserRole = "member", cerId: string | null = "cer-forli-centro"): Promise<SessionUser | null> {
   await ensureSeeded();
   if (users.has(email.toLowerCase())) return null;
   const id = `user-${crypto.randomUUID().slice(0, 8)}`;

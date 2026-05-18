@@ -95,7 +95,7 @@ const calculateMemberBenefit = (type: MemberType, balance: number) => {
 };
 
 export const cerProfile: CerProfile = {
-  id: "cer-bertinoro",
+  id: "cer-forli-centro",
   name: "Energia Insieme Bertinoro",
   territory: "Collina e pianura forlivese",
   municipality: "Bertinoro",
